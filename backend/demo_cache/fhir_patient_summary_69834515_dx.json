@@ -1,0 +1,33 @@
+{
+  "success": true,
+  "section": "diagnoses",
+  "patientId": "698345153023e19306b525ad8a6c7eca0cfc22dfff2a21b51945d5175d6d18f2",
+  "count": 3,
+  "totalAvailable": 3,
+  "results": [
+    {
+      "id": "",
+      "name": "Pain in right wrist",
+      "code": "279039007",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2025-11-13"
+    },
+    {
+      "id": "",
+      "name": "Idiopathic gout, right wrist",
+      "code": "36328005",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2025-10-21"
+    },
+    {
+      "id": "",
+      "name": "Contusion of right upper arm",
+      "code": "125668008",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2025-05-26"
+    }
+  ]
+}

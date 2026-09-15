@@ -1,0 +1,97 @@
+{
+  "success": true,
+  "section": "labs",
+  "patientId": "698345153023e19306b525ad8a6c7eca0cfc22dfff2a21b51945d5175d6d18f2",
+  "count": 8,
+  "totalAvailable": 8,
+  "results": [
+    {
+      "id": "",
+      "name": "ANA by immunofluorescence",
+      "code": "5045-8",
+      "codeSystem": "http://loinc.org",
+      "value": 0,
+      "unit": "negative",
+      "category": "laboratory",
+      "date": "2025-10-24",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "CCP antibodies IgG/IgA",
+      "code": "56964-8",
+      "codeSystem": "http://loinc.org",
+      "value": 6,
+      "unit": "U",
+      "category": "laboratory",
+      "date": "2025-10-24",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Rheumatoid factor",
+      "code": "14535-3",
+      "codeSystem": "http://loinc.org",
+      "value": 10,
+      "unit": "IU/mL",
+      "category": "laboratory",
+      "date": "2025-10-22",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Uric acid",
+      "code": "3084-1",
+      "codeSystem": "http://loinc.org",
+      "value": 9.6,
+      "unit": "mg/dL",
+      "category": "laboratory",
+      "date": "2025-10-21",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Erythrocyte sedimentation rate",
+      "code": "4537-7",
+      "codeSystem": "http://loinc.org",
+      "value": 30,
+      "unit": "mm/h",
+      "category": "laboratory",
+      "date": "2025-10-21",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "C-reactive protein",
+      "code": "1988-5",
+      "codeSystem": "http://loinc.org",
+      "value": 0.34,
+      "unit": "mg/dL",
+      "category": "laboratory",
+      "date": "2025-10-21",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Hemoglobin",
+      "code": "718-7",
+      "codeSystem": "http://loinc.org",
+      "value": 13.1,
+      "unit": "g/dL",
+      "category": "laboratory",
+      "date": "2025-10-21",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "White blood cell count",
+      "code": "6690-2",
+      "codeSystem": "http://loinc.org",
+      "value": 9.0,
+      "unit": "10*3/uL",
+      "category": "laboratory",
+      "date": "2025-10-21",
+      "status": "final"
+    }
+  ]
+}

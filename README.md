@@ -100,11 +100,21 @@ Find your datastore ID with `aws healthlake list-fhir-datastores --profile <your
 ## Running the application
 
 1. Open the frontend URL (CloudFront domain, or the S3 static website URL in bypass mode). Log in if Cognito is enabled.
-2. **Today's Schedule** loads patients from HealthLake.
-3. Click a patient → the **Pre-visit Patient Insights** panel (an AI assistant named "Ellis") generates a narrative overview, timeline, and visit priorities from the patient's FHIR history — takes 3–5 minutes on first run.
+2. **Today's Schedule** loads patients from HealthLake, with each patient's appointment slot computed dynamically (current time rounded up to the next hour, then +1 hour per patient, skipping the 12–1 PM lunch break) rather than hardcoded — see [Frontend configuration](#frontend-configuration) below to change the clinic's timezone.
+3. Click a patient → the Patient Portal's **Diagnoses**, **Vital Signs**, and **Recent Lab Results** panels (plus the **Lab results** tab, full history) load live from HealthLake via a patient-scoped FHIR search. The **Pre-visit Patient Insights** panel (an AI assistant named "Ellis") generates a narrative overview, timeline, and visit priorities from the patient's FHIR history — takes 3–5 minutes on first run. If Bedrock model access isn't enabled for this account, that panel falls back to a non-LLM, keyword-based summary and shows a "Rule-Based Summary" badge so it's clear the content isn't AI-generated.
 4. Click **Start AI Consultation** → grants mic access and streams audio to Connect Health in real time; a live transcript comes back over the WebSocket connection.
 5. Stop the consultation → review the generated SOAP notes, ICD-10/CPT medical codes, and after-visit summary. Medical coding is a gated preview feature and may show no codes if this AWS account hasn't been granted access — everything else works independently of it.
 6. **Demo Mode** (`Ctrl+Shift+D`) runs the whole UI from cached responses with no live AWS calls — useful for a quick smoke test before HealthLake has real data.
+
+## Frontend configuration
+
+`frontend/js/config.js` holds settings applied client-side (separate from `cdk.json`'s deploy-time settings above):
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `window.APP_TIMEZONE` | `America/Lima` | IANA timezone the clinic operates in — drives the schedule screen's appointment-slot times, the "today" date header, and the header clock, so they reflect the clinic's local time rather than whatever timezone the viewer's own browser happens to be set to. Change this one line for a different clinic. |
+| `window.CLINIC_PHONE` | `(555) 123-4567` (both) | Scheduling and office phone numbers shown in the UI footer and SMS follow-up template. |
+| `window.COGNITO_CONFIG` | placeholder values | Templated automatically at deploy time (see the `AmazonConnectHealthFrontend` stack above) — don't hand-edit the deployed copy. |
 
 ## Troubleshooting
 
@@ -121,6 +131,7 @@ Issues hit and fixed while building this CDK port — worth checking first if so
 | `ReservedConcurrentExecutions ... decreases account's UnreservedConcurrentExecution below its minimum` | Low-quota sandbox accounts can't afford per-Lambda concurrency reservations on one-shot custom resources — just remove `reserved_concurrent_executions` |
 | Docker build fails on `eclipse-temurin:*-alpine`, "no match for platform in manifest" | Apple Silicon defaults to `arm64`; pin `platform=ecr_assets.Platform.LINUX_AMD64` on `DockerImageAsset` (matches Fargate's `X86_64` runtime anyway) |
 | Empty ICD-10/CPT codes after a consultation, everything else populated | Medical coding (`GenerateMedicalCodes`) is a gated preview feature — check `aws s3 ls` under the session's `post-stream-action/` prefix for a missing `medicalCodes.json` to confirm |
+| Local backend (`python server.py`) returns `403 Forbidden` with `Server: AirTunes/...` for every request, on macOS | The OS's own AirPlay Receiver service squats on port 5000/`localhost` — use `http://127.0.0.1:5000` instead, or disable AirPlay Receiver (System Settings → General → AirDrop & Handoff) if you need the `localhost` hostname specifically |
 
 ## Tests
 

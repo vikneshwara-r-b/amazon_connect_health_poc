@@ -519,6 +519,12 @@
             color: #2563eb;
         }
 
+        .priority-badge.fallback {
+            background: rgba(245, 158, 11, 0.12);
+            color: #b45309;
+            margin-left: 8px;
+        }
+
         /* Recommendation List */
         .recommendation-list {
             list-style: none;
@@ -916,7 +922,7 @@
         <!-- Patient Header -->
         <div class="patient-header-compact">
             <span class="patient-name-large" id="patientNameHeader">Diabetic follow-up</span>
-            <span class="visit-time">Today 9:00 AM</span>
+            <span class="visit-time" id="visitTimeHeader">Today 9:00 AM</span>
         </div>
 
         <!-- SITUATION Card -->
@@ -927,6 +933,7 @@
                     <polyline points="12,6 12,12 16,14"/>
                 </svg>
                 <span class="visit-title">Patient Story</span>
+                <span class="priority-badge fallback" id="patientStoryFallbackBadge" style="display:none;" title="Bedrock AI synthesis is unavailable — this is a rule-based summary generated from raw visit data">Rule-Based Summary</span>
             </div>
             <div class="visit-card-body">
                 <div class="visit-summary" id="situationSummary">
@@ -951,6 +958,7 @@
                     <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
                 </svg>
                 <span class="visit-title">Visit Priorities</span>
+                <span class="priority-badge fallback" id="visitPrioritiesFallbackBadge" style="display:none;" title="Bedrock AI synthesis is unavailable — these are rule-based priorities matched from raw visit data">Rule-Based Summary</span>
             </div>
             <div class="visit-card-body" id="assessmentBody">
                 <div class="subsection-header" id="mustAddressHeader" style="display:none;">TODAY'S VISIT - MUST ADDRESS</div>
@@ -1282,6 +1290,10 @@
             if (patientNameEl && patient) {
                 patientNameEl.textContent = patient.name + ' - Follow-up Visit';
             }
+            const visitTimeEl = document.getElementById('visitTimeHeader');
+            if (visitTimeEl && patient && patient.appointmentTime) {
+                visitTimeEl.textContent = 'Today ' + patient.appointmentTime;
+            }
             
             // Update situation summary
             const summaryEl = document.getElementById('situationSummary');
@@ -1418,6 +1430,13 @@
             // Clear Patient Story
             const situationSummary = document.getElementById('situationSummary');
             if (situationSummary) situationSummary.innerHTML = '';
+
+            // Reset the "Rule-Based Summary" fallback badges — the new patient's synthesis
+            // path (success or fallback) decides below whether to show them again.
+            const patientStoryFallbackBadge = document.getElementById('patientStoryFallbackBadge');
+            const visitPrioritiesFallbackBadge = document.getElementById('visitPrioritiesFallbackBadge');
+            if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = 'none';
+            if (visitPrioritiesFallbackBadge) visitPrioritiesFallbackBadge.style.display = 'none';
         }
         
         // Group a section's raw ClinicalNarrative entries by their "## Header" subsection,
@@ -1688,24 +1707,32 @@
                         // Send to parent for scribe sidebar
                         try { window.parent.postMessage({ type: 'bedrock-priorities', priorities: data.visitPriorities }, '*'); } catch(e) {}
                     }
-                    
+
                     // Generate checklist from priorities
                     if (data.visitPriorities) {
                         renderBedrockChecklist(data.visitPriorities);
                     }
-                    
+
+                    // Real Bedrock (or curated demo-cache) content — not the fallback path.
+                    const patientStoryFallbackBadgeOk = document.getElementById('patientStoryFallbackBadge');
+                    const visitPrioritiesFallbackBadgeOk = document.getElementById('visitPrioritiesFallbackBadge');
+                    if (patientStoryFallbackBadgeOk) patientStoryFallbackBadgeOk.style.display = 'none';
+                    if (visitPrioritiesFallbackBadgeOk) visitPrioritiesFallbackBadgeOk.style.display = 'none';
+
                     console.log('[Bedrock] Pre-visit content rendered from single call');
                     return;
                 }
             } catch (e) {
                 console.warn('Pre-visit synthesis failed, using fallbacks:', e);
             }
-            
+
             // Fallback: try old separate endpoints
             const age = patient?.age || '';
             const gender = patient?.gender || '';
             const summaryText = sections['overview'] || 'No overview available';
             if (summaryEl) summaryEl.innerHTML = `<strong>${age} ${gender}</strong> - ${summaryText.replace(/\n/g, ' ')}`;
+            const patientStoryFallbackBadge = document.getElementById('patientStoryFallbackBadge');
+            if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = '';
             synthesizePatientNarrative(sections, patient, summaryEl, summaryEl.innerHTML);
             synthesizeVisitPriorities(sections, patient, resultsText);
         }
@@ -1725,14 +1752,19 @@
                     })
                 });
                 const data = await resp.json();
+                const patientStoryFallbackBadge = document.getElementById('patientStoryFallbackBadge');
                 if (data.success && data.narrative) {
                     summaryEl.innerHTML = sanitizeLLMText(data.narrative);
+                    if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = 'none';
                 } else {
                     summaryEl.innerHTML = fallbackHtml;
+                    if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = '';
                 }
             } catch (e) {
                 console.warn('Narrative synthesis failed, using fallback:', e);
                 summaryEl.innerHTML = fallbackHtml;
+                const patientStoryFallbackBadge = document.getElementById('patientStoryFallbackBadge');
+                if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = '';
             }
         }
         
@@ -1783,14 +1815,18 @@
                     renderBedrockChecklist(data.priorities);
                     // Send priorities to parent window for scribe sidebar
                     try { window.parent.postMessage({ type: 'bedrock-priorities', priorities: data.priorities }, '*'); } catch(e) {}
+                    const visitPrioritiesFallbackBadgeOk = document.getElementById('visitPrioritiesFallbackBadge');
+                    if (visitPrioritiesFallbackBadgeOk) visitPrioritiesFallbackBadgeOk.style.display = 'none';
                     console.log('[Bedrock] Priorities & checklist rendered from Bedrock');
                     return;
                 }
             } catch (e) {
                 console.warn('Bedrock priorities failed, using regex fallback:', e);
             }
-            
-            // Fallback to regex-based generation
+
+            // Fallback to regex-based generation — no LLM involved, see generateVisitPriorities()
+            const visitPrioritiesFallbackBadge = document.getElementById('visitPrioritiesFallbackBadge');
+            if (visitPrioritiesFallbackBadge) visitPrioritiesFallbackBadge.style.display = '';
             generateVisitPriorities(sections, resultsText);
             generateVisitChecklist(sections, resultsText);
         }

@@ -534,13 +534,20 @@
            ========================================================================== */
         .patient-portal-background {
             width: 70%;
-            min-height: 100vh;
+            /* Bounded to the viewport (was min-height: 100vh, which let content grow past
+               the viewport instead of being clipped/scrolled — position: fixed means nothing
+               below the fold was ever reachable). box-sizing: border-box (global reset above)
+               means padding-bottom is absorbed inside this height, not added on top of it. */
+            height: calc(100vh - 120px);
             position: fixed;
             left: 0;
             top: 120px;
             z-index: 1;
             padding-bottom: 80px; /* Space for chat input */
             background: #fafafa;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
         .tab-nav {
@@ -551,6 +558,7 @@
             gap: 20px;
             position: relative;
             z-index: 10;
+            flex-shrink: 0;
         }
 
         .tab {
@@ -577,7 +585,8 @@
 
         .main-content {
             display: flex;
-            height: calc(100vh - 124px);
+            flex: 1;
+            min-height: 0; /* fill exactly what's left under .tab-nav inside the flex column, whatever its real height is */
         }
 
         /* ==========================================================================
@@ -633,6 +642,7 @@
             flex: 1;
             display: flex;
             background: #ffffff;
+            min-height: 0; /* let .main-content's fixed height win instead of stretching to fit content */
         }
 
         .section-subheader {
@@ -663,12 +673,15 @@
             width: 300px;
             border-right: 1px solid #ddd;
             overflow-y: auto;
+            min-height: 0;
         }
 
         .right-panel {
             flex: 1;
             padding: 16px;
             background: #f8f8f8;
+            overflow-y: auto;
+            min-height: 0;
         }
 
         .section {
@@ -738,6 +751,21 @@
         .patient-portal-background .flowsheet-item,
         .patient-portal-background .section-content div {
             filter: blur(1.5px);
+        }
+
+        /* Sections backed by live HealthLake data (Diagnoses, Vital Signs, Recent Labs,
+           Lab results tab) are real patient data, not placeholder/mock content — don't
+           blur them. ID selectors here outrank the class-based blur rule above regardless
+           of source order. */
+        .patient-portal-background #diagnosesContent,
+        .patient-portal-background #diagnosesContent div,
+        .patient-portal-background #vitalSignsContent,
+        .patient-portal-background #vitalSignsContent div,
+        .patient-portal-background #recentLabsContent,
+        .patient-portal-background #recentLabsContent div,
+        #labResultsTabContent,
+        #labResultsTabContent div {
+            filter: none;
         }
 
         /* ==========================================================================

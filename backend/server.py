@@ -75,6 +75,65 @@ def serve_static(path):
     """Serve static files from frontend."""
     return send_from_directory(app.static_folder, path)
 
+def _healthlake_request(path_and_query, timeout=15):
+    """SigV4-signed GET against the HealthLake FHIR REST API. Returns the raw requests.Response.
+
+    `path_and_query` is appended directly after the datastore's /r4/ base — callers are
+    responsible for allowlisting/validating any user-supplied segments before calling this.
+    """
+    if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
+        session = boto3.Session(profile_name=AWS_PROFILE)
+    else:
+        session = boto3.Session()
+    credentials = session.get_credentials()
+
+    url = f"https://healthlake.{AWS_REGION}.amazonaws.com/datastore/{HEALTHLAKE_DATASTORE_ID}/r4/{path_and_query}"
+
+    from botocore.auth import SigV4Auth
+    from botocore.awsrequest import AWSRequest
+    import requests as req_lib
+
+    headers = {'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json'}
+    aws_req = AWSRequest(method='GET', url=url, headers=headers)
+    SigV4Auth(credentials, 'healthlake', AWS_REGION).add_auth(aws_req)
+
+    return req_lib.get(url, headers=dict(aws_req.headers), timeout=timeout)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, path is built only from allowlisted/regex-validated segments by callers
+
+
+def _extract_condition_fields(resource):
+    """Shared Condition field extraction, used for both single-GET and search-result rows."""
+    meta = {}
+    code = resource.get("code", {})
+    meta["name"] = code.get("text") or (code.get("coding", [{}])[0].get("display") if code.get("coding") else None) or "Unknown"
+    if code.get("coding"):
+        meta["code"] = code["coding"][0].get("code", "")
+        meta["codeSystem"] = code["coding"][0].get("system", "")
+    meta["clinicalStatus"] = resource.get("clinicalStatus", {}).get("coding", [{}])[0].get("code", "")
+    onset = resource.get("onsetDateTime") or resource.get("onsetPeriod", {}).get("start")
+    if onset:
+        meta["onsetDate"] = onset
+    return meta
+
+
+def _extract_observation_fields(resource):
+    """Shared Observation field extraction, used for both single-GET and search-result rows."""
+    meta = {}
+    code = resource.get("code", {})
+    meta["name"] = code.get("text") or (code.get("coding", [{}])[0].get("display") if code.get("coding") else None) or "Unknown"
+    if code.get("coding"):
+        meta["code"] = code["coding"][0].get("code", "")
+        meta["codeSystem"] = code["coding"][0].get("system", "")
+    vq = resource.get("valueQuantity", {})
+    if vq:
+        meta["value"] = vq.get("value")
+        meta["unit"] = vq.get("unit", "")
+    cat = resource.get("category", [{}])[0].get("coding", [{}])[0].get("code", "")
+    meta["category"] = cat
+    meta["date"] = resource.get("effectiveDateTime") or resource.get("effectivePeriod", {}).get("start")
+    meta["status"] = resource.get("status")
+    return meta
+
+
 # Global client instance
 _client = None
 
@@ -115,26 +174,7 @@ def list_patients():
             return jsonify(cached)
 
     try:
-        # In ECS, use default credentials (IAM role). Locally, use profile if set.
-        if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
-            session = boto3.Session(profile_name=AWS_PROFILE)
-        else:
-            session = boto3.Session()
-        credentials = session.get_credentials()
-        
-        # Build HealthLake URL
-        url = f"https://healthlake.{AWS_REGION}.amazonaws.com/datastore/{HEALTHLAKE_DATASTORE_ID}/r4/Patient?_count=100"
-        
-        # Sign the request
-        from botocore.auth import SigV4Auth
-        from botocore.awsrequest import AWSRequest
-        import requests
-        
-        headers = {'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json'}
-        request = AWSRequest(method='GET', url=url, headers=headers)
-        SigV4Auth(credentials, 'healthlake', AWS_REGION).add_auth(request)
-        
-        response = requests.get(url, headers=dict(request.headers), timeout=30)  # nosemgrep: use-raise-for-status — non-200 responses are handled by bundle.get() returning empty, surfaced as empty patient list
+        response = _healthlake_request("Patient?_count=100", timeout=30)  # nosemgrep: use-raise-for-status — non-200 responses are handled by bundle.get() returning empty, surfaced as empty patient list
         bundle = response.json()
         
         patients = []
@@ -632,26 +672,8 @@ def get_fhir_resource(resource_type, resource_id):
     # SSRF mitigation: host is a fixed HealthLake endpoint, not user-controlled.
     # Only resource_type (allowlisted above) and resource_id (regex-validated above)
     # are interpolated into the path. The scheme is always HTTPS.
-    HEALTHLAKE_BASE_URL = f"https://healthlake.{AWS_REGION}.amazonaws.com/datastore/{HEALTHLAKE_DATASTORE_ID}/r4"
-
     try:
-        if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
-            session = boto3.Session(profile_name=AWS_PROFILE)
-        else:
-            session = boto3.Session()
-        credentials = session.get_credentials()
-
-        url = f"{HEALTHLAKE_BASE_URL}/{resource_type}/{resource_id}"
-
-        from botocore.auth import SigV4Auth
-        from botocore.awsrequest import AWSRequest
-        import requests as req_lib
-
-        headers = {'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json'}
-        aws_req = AWSRequest(method='GET', url=url, headers=headers)
-        SigV4Auth(credentials, 'healthlake', AWS_REGION).add_auth(aws_req)
-
-        response = req_lib.get(url, headers=dict(aws_req.headers), timeout=15)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, resource_type is allowlisted, resource_id is regex-validated
+        response = _healthlake_request(f"{resource_type}/{resource_id}")  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, resource_type is allowlisted, resource_id is regex-validated
         if response.status_code != 200:
             return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
 
@@ -667,14 +689,7 @@ def get_fhir_resource(resource_type, resource_id):
 
         # Observation: test name, value, unit
         if resource_type == "Observation":
-            code = resource.get("code", {})
-            meta["name"] = code.get("text") or (code.get("coding", [{}])[0].get("display") if code.get("coding") else None) or "Unknown"
-            vq = resource.get("valueQuantity", {})
-            if vq:
-                meta["value"] = vq.get("value")
-                meta["unit"] = vq.get("unit", "")
-            cat = resource.get("category", [{}])[0].get("coding", [{}])[0].get("code", "")
-            meta["category"] = cat
+            meta.update(_extract_observation_fields(resource))
 
         # MedicationRequest
         elif resource_type == "MedicationRequest":
@@ -699,16 +714,7 @@ def get_fhir_resource(resource_type, resource_id):
 
         # Condition
         elif resource_type == "Condition":
-            code = resource.get("code", {})
-            meta["name"] = code.get("text") or (code.get("coding", [{}])[0].get("display") if code.get("coding") else None) or "Unknown"
-            if code.get("coding"):
-                meta["code"] = code["coding"][0].get("code", "")
-                meta["codeSystem"] = code["coding"][0].get("system", "")
-            meta["clinicalStatus"] = resource.get("clinicalStatus", {}).get("coding", [{}])[0].get("code", "")
-            # Onset date
-            onset = resource.get("onsetDateTime") or resource.get("onsetPeriod", {}).get("start")
-            if onset:
-                meta["onsetDate"] = onset
+            meta.update(_extract_condition_fields(resource))
 
         # DiagnosticReport
         elif resource_type == "DiagnosticReport":
@@ -762,6 +768,79 @@ def get_fhir_resource(resource_type, resource_id):
 
     except Exception as e:
         return _safe_error(e, "get_fhir_resource")
+
+
+@app.route('/api/fhir/patient/<patient_id>/summary', methods=['GET'])
+def get_patient_fhir_summary(patient_id):
+    """Patient-scoped FHIR search: Diagnoses (Condition), Vital Signs / Labs (Observation).
+
+    Backs the Patient Portal's Diagnoses/Vital Signs/Recent Labs panels and the
+    Lab results tab — the frontend requests a large `_count` once and slices
+    client-side for the "recent" view vs the full-history tab.
+    """
+    import re
+
+    # SSRF mitigation: validate patient_id is alphanumeric/hyphens only, same as resource_id above
+    if not re.match(r'^[a-zA-Z0-9\-]+$', patient_id):
+        return jsonify({"success": False, "error": "Invalid patient ID"}), 400
+
+    SECTION_RESOURCE = {"diagnoses": "Condition", "vitals": "Observation", "labs": "Observation"}
+    SECTION_SHORT = {"diagnoses": "dx", "vitals": "vital", "labs": "lab"}
+    section = request.args.get('section', '')
+    if section not in SECTION_RESOURCE:
+        return jsonify({"success": False, "error": "Invalid section"}), 400
+
+    try:
+        count = int(request.args.get('_count', 100))
+    except ValueError:
+        count = 100
+    # HealthLake's FHIR search API rejects _count > 100 with a 400.
+    count = max(1, min(count, 100))
+
+    section_short = SECTION_SHORT[section]
+
+    # Demo mode: return cached response for this patient+section
+    if is_demo_request():
+        cached = get_cached_response('fhir_patient_summary', f"{patient_id[:8]}_{section_short}")
+        if cached:
+            return jsonify(cached)
+
+    resource_type = SECTION_RESOURCE[section]
+    if resource_type == "Condition":
+        query = f"Condition?patient={patient_id}&_count={count}&_sort=-recorded-date&_total=accurate"
+    else:
+        category = "vital-signs" if section == "vitals" else "laboratory"
+        query = f"Observation?patient={patient_id}&category={category}&_sort=-date&_count={count}&_total=accurate"
+
+    try:
+        response = _healthlake_request(query)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, patient_id is regex-validated, section/resource_type/category are allowlisted
+        if response.status_code != 200:
+            return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
+
+        bundle = response.json()
+        results = []
+        for entry in bundle.get('entry', []):
+            resource = entry.get('resource', {})
+            fields = _extract_condition_fields(resource) if resource_type == "Condition" else _extract_observation_fields(resource)
+            fields['id'] = resource.get('id', '')
+            results.append(fields)
+
+        response_data = {
+            "success": True,
+            "section": section,
+            "patientId": patient_id,
+            "count": len(results),
+            "totalAvailable": bundle.get('total', len(results)),
+            "results": results
+        }
+
+        if DEMO_RECORD:
+            save_to_cache('fhir_patient_summary', f"{patient_id[:8]}_{section_short}", response_data)
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        return _safe_error(e, "get_patient_fhir_summary")
 
 
 # =============================================================================

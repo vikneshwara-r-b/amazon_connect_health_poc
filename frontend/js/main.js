@@ -8739,13 +8739,15 @@ function refreshHeaderData() {
 
         const now = new Date();
 
-        const timeString = now.toLocaleTimeString('en-US', { 
+        const timeString = now.toLocaleTimeString('en-US', {
 
-            hour: 'numeric', 
+            hour: 'numeric',
 
             minute: '2-digit',
 
-            hour12: true 
+            hour12: true,
+
+            timeZone: window.APP_TIMEZONE
 
         });
 
@@ -8937,7 +8939,8 @@ function clearAllTopicSelections() {
 
 
 // Auto-update timestamp every 30 seconds
-
+refreshHeaderData(); // populate immediately — setInterval alone leaves the static
+                      // "3:25 PM" placeholder markup on screen for up to 30s otherwise
 setInterval(refreshHeaderData, 30000);
 
 
@@ -9278,7 +9281,8 @@ function getCurrentPatientContext() {
     if (ageMatch) {
         // Estimate birth year from age
         const age = parseInt(ageMatch[1]);
-        const birthYear = new Date().getFullYear() - age;
+        const currentYear = window.getZonedNow ? window.getZonedNow(window.APP_TIMEZONE).year : new Date().getFullYear();
+        const birthYear = currentYear - age;
         context.dateOfBirth = `${birthYear}-01-01`;
     }
     
@@ -10156,7 +10160,7 @@ function populatePatientSummaryMeta() {
     // Set current date
     if (dateEl) {
         const today = new Date();
-        const options = { year: 'numeric', month: 'long', day: '2-digit' };
+        const options = { year: 'numeric', month: 'long', day: '2-digit', timeZone: window.APP_TIMEZONE };
         dateEl.textContent = today.toLocaleDateString('en-US', options);
     }
     
