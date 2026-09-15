@@ -103,6 +103,20 @@
     "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
     "@aws-cdk/custom-resources:logApiResponseDataPropertyTrueDefault": false,
     "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
-    "@aws-cdk/s3-notifications:addS3TrustKeyPolicyForSnsSubscriptions": true
+    "@aws-cdk/s3-notifications:addS3TrustKeyPolicyForSnsSubscriptions": true,
+
+    "//": "---- Amazon Connect Health POC deploy config: edit below instead of passing -c flags ----",
+    "environment": "dev",
+    "connectHealthDomainName": "connect-health-demo",
+    "existingDomainId": "",
+    "existingSubscriptionId": "",
+    "healthlakeDatastoreName": "connect-health-demo",
+    "existingHealthlakeDatastoreId": "",
+    "corsOrigin": "*",
+    "streamingCertificateArn": "",
+    "frontendBucketName": "",
+    "demoUserEmail": "connecthealth_demo@example.com",
+    "enableCognito": "true",
+    "useCloudFront": "false"
   }
 }

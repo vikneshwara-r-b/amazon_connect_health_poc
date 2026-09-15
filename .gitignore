@@ -7,3 +7,9 @@ __pycache__
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+.claude
+
+# CDK context cache -- caches real per-account values (account ID, VPC ID,
+# subnet IDs) from `cdk synth`/`deploy` lookups; regenerated automatically,
+# should not be committed.
+cdk.context.json
