@@ -1337,22 +1337,28 @@
                 const allSectionTexts = {};
                 let overviewNarrative = '';
                 let overviewEvidenceMap = {};
-                
+                let overviewItemMap = {};
+
                 sections.forEach(section => {
                     const sectionName = (section.SectionName || '').trim();
                     const clinicalNarrative = section.ClinicalNarrative || [];
                     const narrativeText = clinicalNarrative.map(n => n.Text).join('');
-                    
+
                     // Collect ALL narrative items with evidence from ALL sections
                     clinicalNarrative.forEach(item => {
                         if (item.Evidence && item.Evidence.length > 0) {
                             allClinicalNarrative.push(item);
                         }
                     });
-                    
+
                     if (sectionName.includes('PATIENT_AND_ENCOUNTER_OVERVIEW')) {
                         overviewNarrative = narrativeText;
                         overviewEvidenceMap = extractEvidenceFromNarrative(clinicalNarrative);
+                        // Preserve each ClinicalNarrative entry as its own discrete item, keyed by
+                        // subsection (## header). Real API responses don't use "*" bullets like the
+                        // cached demo data does, so items must be split on their natural array
+                        // boundaries rather than a literal bullet character.
+                        overviewItemMap = buildOverviewItemMap(clinicalNarrative);
                     } else if (sectionName.includes('SINCE_LAST_VISIT')) {
                         allSectionTexts.sinceLastVisit = narrativeText;
                         updateSinceLastVisit(narrativeText);
@@ -1368,7 +1374,7 @@
                 
                 // Now call parseAndDisplayOverview with ALL evidence items collected
                 if (overviewNarrative) {
-                    parseAndDisplayOverview(overviewNarrative, patient, overviewEvidenceMap, allClinicalNarrative, allSectionTexts);
+                    parseAndDisplayOverview(overviewNarrative, patient, overviewEvidenceMap, allClinicalNarrative, allSectionTexts, overviewItemMap);
                 }
                 
                 showNotification('Pre-visit insights loaded for ' + (patient ? patient.name : 'patient'));
@@ -1414,8 +1420,28 @@
             if (situationSummary) situationSummary.innerHTML = '';
         }
         
+        // Group a section's raw ClinicalNarrative entries by their "## Header" subsection,
+        // preserving each entry as its own discrete item (no bullet character required).
+        function buildOverviewItemMap(clinicalNarrative) {
+            const map = {};
+            let current = 'overview';
+            (clinicalNarrative || []).forEach(item => {
+                const text = item.Text || '';
+                const trimmed = text.trim();
+                if (!trimmed) return;
+                if (trimmed.startsWith('## ')) {
+                    current = trimmed.replace(/^##\s*/, '').toLowerCase();
+                    if (!map[current]) map[current] = [];
+                    return;
+                }
+                if (!map[current]) map[current] = [];
+                map[current].push(text.trim());
+            });
+            return map;
+        }
+
         // Parse the PATIENT_AND_ENCOUNTER_OVERVIEW section and distribute to cards
-        function parseAndDisplayOverview(narrative, patient, evidenceMap = {}, clinicalNarrative = [], extraSections = {}) {
+        function parseAndDisplayOverview(narrative, patient, evidenceMap = {}, clinicalNarrative = [], extraSections = {}, itemMap = {}) {
             // Split by markdown headers (## Header)
             const sections = {};
             let currentSection = 'overview';
@@ -1475,25 +1501,27 @@
             const conditionBadges = document.getElementById('conditionBadges');
             if (conditionBadges) {
                 const conditions = sections['chronic and active conditions'] || '';
-                if (conditions.includes('No chronic') || conditions.trim() === '' || conditions.includes('No chronic or active')) {
+                const conditionItems = (itemMap['chronic and active conditions'] || [])
+                    .map(item => item.replace(/^[*-]\s*/, '').trim())
+                    .filter(Boolean);
+                if (conditionItems.length === 0 || conditions.includes('No chronic') || conditions.includes('No chronic or active')) {
                     conditionBadges.innerHTML = '<span class="condition-badge">No chronic conditions documented</span>';
                 } else {
-                    // Parse bullet points
-                    const items = conditions.split('*').filter(s => s.trim());
-                    conditionBadges.innerHTML = items.map(item => 
-                        `<span class="condition-badge">${item.trim()}</span>`
+                    conditionBadges.innerHTML = conditionItems.map(item =>
+                        `<span class="condition-badge">${item.replace(/\n/g, ' ')}</span>`
                     ).join('');
                 }
             }
-            
+
             // Update BACKGROUND card - Medications
             const medBadges = document.getElementById('medicationBadges');
             if (medBadges) {
-                const meds = sections['current medications'] || '';
-                const medItems = meds.split('*').filter(s => s.trim());
+                const medItems = (itemMap['current medications'] || [])
+                    .map(item => item.replace(/^[*-]\s*/, '').trim())
+                    .filter(Boolean);
                 if (medItems.length > 0) {
-                    medBadges.innerHTML = medItems.map(item => 
-                        `<span class="med-badge">${item.trim().replace(/\n/g, ' ')}</span>`
+                    medBadges.innerHTML = medItems.map(item =>
+                        `<span class="med-badge">${item.replace(/\n/g, ' ')}</span>`
                     ).join('');
                 } else {
                     medBadges.innerHTML = '<span class="med-badge">No current medications</span>';
@@ -2740,20 +2768,27 @@
             
             const items = [];
             
-            // Check blood pressure
-            const bpMatch = resultsText.match(/Blood pressure\s+(\d+)\/(\d+)\s*mmHg/i);
+            // Check blood pressure. Tolerates both the old cached-demo combined
+            // "Blood pressure 145/94 mmHg" format (diastolic present) and the live
+            // API's "Systolic blood pressure was 145 mmHg" sentence style (diastolic
+            // absent — this dataset only has systolic observations).
+            const bpMatch = resultsText.match(/systolic blood pressure[^0-9]*?(\d+)(?:\/(\d+))?\s*mmHg/i)
+                || resultsText.match(/blood pressure[^0-9]*?(\d+)\/(\d+)\s*mmHg/i);
             if (bpMatch) {
                 const systolic = parseInt(bpMatch[1]);
-                const diastolic = parseInt(bpMatch[2]);
-                if (systolic >= 140 || diastolic >= 90) {
-                    items.push(`Review elevated blood pressure (${bpMatch[1]}/${bpMatch[2]} mmHg)`);
-                } else if (systolic >= 130 || diastolic >= 80) {
-                    items.push(`Monitor blood pressure (${bpMatch[1]}/${bpMatch[2]} mmHg - borderline)`);
+                const diastolic = bpMatch[2] ? parseInt(bpMatch[2]) : null;
+                const reading = diastolic !== null ? `${systolic}/${diastolic} mmHg` : `${systolic} mmHg`;
+                const highThreshold = diastolic !== null ? (systolic >= 140 || diastolic >= 90) : systolic >= 140;
+                const borderlineThreshold = diastolic !== null ? (systolic >= 130 || diastolic >= 80) : systolic >= 130;
+                if (highThreshold) {
+                    items.push(`Review elevated blood pressure (${reading})`);
+                } else if (borderlineThreshold) {
+                    items.push(`Monitor blood pressure (${reading} - borderline)`);
                 }
             }
-            
+
             // Check glucose
-            const glucoseMatch = resultsText.match(/Glucose\s+(\d+)\s*mg\/dL/i);
+            const glucoseMatch = resultsText.match(/Glucose[^0-9]*(\d+)\s*mg\/dL/i);
             if (glucoseMatch) {
                 const glucose = parseInt(glucoseMatch[1]);
                 if (glucose >= 126) {

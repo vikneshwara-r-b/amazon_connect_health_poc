@@ -200,19 +200,27 @@ const ConnectHealthStreaming = (function() {
             processor = audioContext.createScriptProcessor(4096, 1, 1);
             
             processor.onaudioprocess = (e) => {
-                if (!isStreaming || isPaused || !ws || ws.readyState !== WebSocket.OPEN) {
+                if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) {
                     return;
                 }
-                
+
                 const inputData = e.inputBuffer.getChannelData(0);
-                
+
                 // Convert float32 to int16 PCM
                 const pcmData = new Int16Array(inputData.length);
-                for (let i = 0; i < inputData.length; i++) {
-                    const s = Math.max(-1, Math.min(1, inputData[i]));
-                    pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                if (isPaused) {
+                    // Connect Health's streaming API has no "pause" concept -- it expects a
+                    // continuous audio stream and times out the session if chunks stop
+                    // arriving. Send silence instead of nothing so the stream stays alive;
+                    // silence produces no transcript content, so it doesn't affect the SOAP
+                    // note (pcmData is already zero-initialized).
+                } else {
+                    for (let i = 0; i < inputData.length; i++) {
+                        const s = Math.max(-1, Math.min(1, inputData[i]));
+                        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
                 }
-                
+
                 // Send as binary
                 ws.send(pcmData.buffer);
             };
