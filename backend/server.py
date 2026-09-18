@@ -75,11 +75,14 @@ def serve_static(path):
     """Serve static files from frontend."""
     return send_from_directory(app.static_folder, path)
 
-def _healthlake_request(path_and_query, timeout=15):
-    """SigV4-signed GET against the HealthLake FHIR REST API. Returns the raw requests.Response.
+def _healthlake_request(path_and_query, method='GET', body=None, timeout=15):
+    """SigV4-signed request against the HealthLake FHIR REST API. Returns the raw requests.Response.
 
     `path_and_query` is appended directly after the datastore's /r4/ base — callers are
     responsible for allowlisting/validating any user-supplied segments before calling this.
+    `body`, when given, is a dict serialized as the FHIR resource JSON for POST/PUT writes —
+    it's signed and sent as the exact same bytes (SigV4 signs the request body, so the two
+    must never diverge).
     """
     if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
         session = boto3.Session(profile_name=AWS_PROFILE)
@@ -94,10 +97,11 @@ def _healthlake_request(path_and_query, timeout=15):
     import requests as req_lib
 
     headers = {'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json'}
-    aws_req = AWSRequest(method='GET', url=url, headers=headers)
+    data = json.dumps(body) if body is not None else None
+    aws_req = AWSRequest(method=method, url=url, headers=headers, data=data)
     SigV4Auth(credentials, 'healthlake', AWS_REGION).add_auth(aws_req)
 
-    return req_lib.get(url, headers=dict(aws_req.headers), timeout=timeout)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, path is built only from allowlisted/regex-validated segments by callers
+    return req_lib.request(method, url, headers=dict(aws_req.headers), data=data, timeout=timeout)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, path is built only from allowlisted/regex-validated segments by callers
 
 
 def _extract_condition_fields(resource):
@@ -841,6 +845,114 @@ def get_patient_fhir_summary(patient_id):
 
     except Exception as e:
         return _safe_error(e, "get_patient_fhir_summary")
+
+
+@app.route('/api/streaming/session/start', methods=['POST'])
+def start_streaming_session():
+    """Create a FHIR Encounter in HealthLake linking a new consultation session to
+    its patient, before the frontend opens the streaming WebSocket. Sessions have
+    no other durable link to a patient — the Encounter's identifier ties it back
+    to the S3 session data by sessionId.
+    """
+    import re
+    from datetime import datetime, timezone
+
+    data = request.get_json(silent=True) or {}
+    patient_id = data.get('patientId', '')
+    session_id = data.get('sessionId', '')
+
+    if not re.match(r'^[a-zA-Z0-9\-]+$', patient_id):
+        return jsonify({"success": False, "error": "Invalid patient ID"}), 400
+    if not session_id or not re.match(r'^[a-zA-Z0-9\-]+$', session_id):
+        return jsonify({"success": False, "error": "Invalid session ID"}), 400
+
+    # Demo mode / writes never hit AWS — return a synthetic id so the frontend flow
+    # works identically, but nothing is actually written anywhere.
+    if is_demo_request():
+        return jsonify({"success": True, "encounterId": f"demo-encounter-{session_id[:8]}"})
+
+    encounter = {
+        "resourceType": "Encounter",
+        "status": "in-progress",
+        "class": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "AMB",
+            "display": "ambulatory"
+        },
+        "subject": {"reference": f"Patient/{patient_id}"},
+        "period": {"start": datetime.now(timezone.utc).isoformat()},
+        "identifier": [{"system": "urn:connect-health:session-id", "value": session_id}]
+    }
+
+    try:
+        response = _healthlake_request("Encounter", method='POST', body=encounter)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, patient_id/session_id are regex-validated
+        if response.status_code not in (200, 201):
+            return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
+
+        created = response.json()
+        return jsonify({"success": True, "encounterId": created.get('id')})
+
+    except Exception as e:
+        return _safe_error(e, "start_streaming_session")
+
+
+@app.route('/api/fhir/patient/<patient_id>/document-reference', methods=['POST'])
+def create_document_reference(patient_id):
+    """Write an approved SOAP note back to HealthLake as a FHIR DocumentReference,
+    optionally linked to the Encounter created at session start. This is the only
+    place a consultation produces a durable change to the patient's HealthLake chart.
+    """
+    import re
+    import base64
+    from datetime import datetime, timezone
+
+    if not re.match(r'^[a-zA-Z0-9\-]+$', patient_id):
+        return jsonify({"success": False, "error": "Invalid patient ID"}), 400
+
+    data = request.get_json(silent=True) or {}
+    content = data.get('content', '')
+    encounter_id = data.get('encounterId', '')
+
+    if not content or not content.strip():
+        return jsonify({"success": False, "error": "content is required"}), 400
+    if encounter_id and not re.match(r'^[a-zA-Z0-9\-]+$', encounter_id):
+        return jsonify({"success": False, "error": "Invalid encounter ID"}), 400
+
+    if is_demo_request():
+        return jsonify({"success": True, "documentReferenceId": f"demo-docref-{patient_id[:8]}"})
+
+    document_reference = {
+        "resourceType": "DocumentReference",
+        "status": "current",
+        "type": {
+            "coding": [{
+                "system": "http://loinc.org",
+                "code": "34117-2",
+                "display": "History and physical note"
+            }]
+        },
+        "subject": {"reference": f"Patient/{patient_id}"},
+        "date": datetime.now(timezone.utc).isoformat(),
+        "content": [{
+            "attachment": {
+                "contentType": "text/plain",
+                "data": base64.b64encode(content.encode('utf-8')).decode('ascii')
+            }
+        }]
+    }
+    if encounter_id:
+        document_reference["context"] = {"encounter": [{"reference": f"Encounter/{encounter_id}"}]}
+
+    try:
+        response = _healthlake_request("DocumentReference", method='POST', body=document_reference)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, patient_id/encounter_id are regex-validated
+        if response.status_code not in (200, 201):
+            return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
+
+        created = response.json()
+        return jsonify({"success": True, "documentReferenceId": created.get('id')})
+
+    except Exception as e:
+        return _safe_error(e, "create_document_reference")
 
 
 # =============================================================================

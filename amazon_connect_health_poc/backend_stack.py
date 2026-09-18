@@ -92,6 +92,12 @@ class BackendStack(Stack):
                     "healthlake:SearchWithPost",
                     "healthlake:SearchEverything",
                     "healthlake:GetCapabilities",
+                    # Write access for Encounter (session start) and DocumentReference
+                    # (approved SOAP notes) — HealthLake has no finer-grained ARN scoping
+                    # than the datastore itself, so this can't be limited to those two
+                    # resource types.
+                    "healthlake:CreateResource",
+                    "healthlake:UpdateResource",
                 ],
                 resources=[
                     f"arn:aws:healthlake:{self.region}:{self.account}:datastore/fhir/{healthlake_datastore_id}"

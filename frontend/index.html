@@ -1618,6 +1618,29 @@
         loadPatientInsights(patientKey);
     };
 
+    // Reflects the signed-in Cognito user's name in the UI instead of the bundled
+    // "Dr. Neil Patel" placeholder. Falls back to leaving the placeholder in place
+    // when Cognito is disabled or no user info is available (e.g. local dev).
+    function updateClinicianNameFromCognito() {
+        if (!window.CognitoAuth || !CognitoAuth.isAuthenticated()) return;
+        const info = CognitoAuth.getUserInfo();
+        const displayName = info && (info.name || info.email || info.username);
+        if (!displayName) return;
+
+        const nameEls = document.querySelectorAll('.schedule-doctor-name, .user-name');
+        nameEls.forEach(el => { el.textContent = displayName; });
+
+        const avatarEl = document.querySelector('.schedule-doctor-avatar');
+        if (avatarEl) {
+            const nameWords = displayName
+                .replace(/^(Dr|Mr|Mrs|Ms|Prof)\.?\s+/i, '') // exclude a title prefix from initials, e.g. "Dr. Neil Patel" -> "NP"
+                .split(/\s+/)
+                .filter(Boolean);
+            const initials = nameWords.slice(0, 2).map(w => w[0].toUpperCase()).join('');
+            if (initials) avatarEl.textContent = initials;
+        }
+    }
+
     // Load patients when page loads
     document.addEventListener('DOMContentLoaded', function() {
         // Set today's date dynamically
@@ -1629,12 +1652,15 @@
         }
 
         // Initialize Cognito authentication (if configured with real values)
-        const cognitoConfigured = window.COGNITO_CONFIG && 
-            window.COGNITO_CONFIG.userPoolId && 
+        const cognitoConfigured = window.COGNITO_CONFIG &&
+            window.COGNITO_CONFIG.userPoolId &&
             !window.COGNITO_CONFIG.userPoolId.startsWith('YOUR_') &&
             window.CognitoAuth;
         if (cognitoConfigured) {
             CognitoAuth.init(window.COGNITO_CONFIG);
+            // Already-authenticated on reload (valid session in localStorage) — no
+            // login screen will appear/be removed, so update the name right away.
+            updateClinicianNameFromCognito();
             // Wait for login before loading patients — loadPatientsFromHealthLake
             // will be called after successful login via _onLoginSuccess path.
             // But we still need to load patients once auth completes.
@@ -1644,6 +1670,7 @@
                     for (const node of m.removedNodes) {
                         if (node.id === 'cognitoLoginScreen') {
                             observer.disconnect();
+                            updateClinicianNameFromCognito();
                             loadPatientsFromHealthLake();
                             return;
                         }

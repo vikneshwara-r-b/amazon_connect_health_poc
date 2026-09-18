@@ -536,14 +536,12 @@
             width: 70%;
             /* Bounded to the viewport (was min-height: 100vh, which let content grow past
                the viewport instead of being clipped/scrolled — position: fixed means nothing
-               below the fold was ever reachable). box-sizing: border-box (global reset above)
-               means padding-bottom is absorbed inside this height, not added on top of it. */
+               below the fold was ever reachable). */
             height: calc(100vh - 120px);
             position: fixed;
             left: 0;
             top: 120px;
             z-index: 1;
-            padding-bottom: 80px; /* Space for chat input */
             background: #fafafa;
             display: flex;
             flex-direction: column;
@@ -2438,6 +2436,18 @@
         .ehr-save-notification.show {
             opacity: 1;
             transform: translateX(-50%) translateY(0) scale(1);
+        }
+
+        .ehr-save-notification.error {
+            border-color: rgba(239, 68, 68, 0.2);
+            box-shadow:
+                0 8px 32px rgba(239, 68, 68, 0.15),
+                0 4px 16px rgba(0, 0, 0, 0.04),
+                inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        }
+
+        .ehr-save-notification.error .ehr-save-notification-content svg {
+            color: #ef4444;
         }
 
         .ehr-save-notification-content {

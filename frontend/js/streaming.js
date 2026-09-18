@@ -67,7 +67,29 @@ const ConnectHealthStreaming = (function() {
             
             // Generate session ID
             sessionId = crypto.randomUUID();
-            
+
+            // Link this session to the patient via a HealthLake Encounter, created
+            // before we start streaming — sessions otherwise have no durable link to
+            // a patient. Non-fatal: a failed/slow write must not block the consultation.
+            window.currentEncounterId = null;
+            try {
+                const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
+                const resp = await fetch(`${backendUrl}/api/streaming/session/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ patientId: window.currentPatientId, sessionId })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    window.currentEncounterId = data.encounterId;
+                    console.log('[Streaming] Encounter created:', data.encounterId);
+                } else {
+                    console.warn('[Streaming] Encounter creation failed, continuing without it:', data.error);
+                }
+            } catch (encounterError) {
+                console.warn('[Streaming] Encounter creation request failed, continuing without it:', encounterError);
+            }
+
             // Send start command
             ws.send(JSON.stringify({ type: 'start', sessionId }));
             console.log('[Streaming] Sent start command:', sessionId);

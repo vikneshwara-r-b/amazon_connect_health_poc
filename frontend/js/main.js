@@ -546,7 +546,7 @@ function flagMoment() {
 
     const flagButtonSize1 = document.querySelector('.scribe-control-btn.flag');
 
-    
+
 
     // Create flag moment object
 
@@ -557,10 +557,6 @@ function flagMoment() {
         timestamp: currentTime,
 
         consultationTime: consultationDuration,
-
-        clipStart: Math.max(0, consultationDuration - 10000), // 10 seconds before
-
-        clipEnd: consultationDuration + 10000, // 10 seconds after (20 second total clip)
 
         formattedTime: formatTime(consultationDuration),
 
@@ -995,20 +991,13 @@ function resetScribeSidebar() {
 }
 
 
-function getFlaggedMoments() {
-
-    return flaggedMoments;
-
-}
-
-
 // ==========================================================================
 
 // EHR SAVE NOTIFICATION & COMPLETION OVERLAY
 
 // ==========================================================================
 
-function showEHRSaveNotification() {
+function showEHRSaveNotification(success = true, message = null) {
 
     const soapOverlay = document.getElementById('soapNotesOverlay');
 
@@ -1019,7 +1008,12 @@ function showEHRSaveNotification() {
 
     const notification = document.createElement('div');
 
-    notification.className = 'ehr-save-notification';
+    notification.className = 'ehr-save-notification' + (success ? '' : ' error');
+
+    const icon = success
+        ? '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'
+        : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
+    const text = message || (success ? 'Documentation saved' : 'Failed to save documentation');
 
     notification.innerHTML = `
 
@@ -1027,17 +1021,15 @@ function showEHRSaveNotification() {
 
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-
-                <polyline points="22 4 12 14.01 9 11.01"/>
+                ${icon}
 
             </svg>
 
-            <span>Documentation saved</span>
+            <span>${escapeHtml(text)}</span>
 
         </div>
 
-    `;
+    `; // nosemgrep: insecure-document-method, html-in-template-string — icon is a fixed literal, text is escapeHtml()'d
 
 
     soapOverlay.appendChild(notification);
@@ -6167,6 +6159,10 @@ async function showSoapNotes() {
             if (!streamingSessionOutputs) streamingSessionOutputs = {};
             streamingSessionOutputs.medicalCodes = processingS3Data.medicalCodes;
         }
+        if (processingS3Data.afterVisitSummary) {
+            if (!streamingSessionOutputs) streamingSessionOutputs = {};
+            streamingSessionOutputs.afterVisitSummary = processingS3Data.afterVisitSummary;
+        }
         processingS3Data = null;
     } else if (currentStreamingSessionId && (!streamingSessionOutputs || !streamingSessionOutputs.clinicalDoc)) {
         console.log('[SOAP] Fetching S3 outputs for session:', currentStreamingSessionId);
@@ -7453,13 +7449,39 @@ async function regenerateCodesFromEditedNotes() {
 }
 
 
-function approveSoapNotes() {
+async function approveSoapNotes() {
 
     console.log('approveSoapNotes called');
 
+    // Build the content to persist from the live (possibly clinician-edited) SOAP
+    // note DOM, not the original fetched clinicalDoc object.
+    const soapMain = document.querySelector('.soap-notes-main');
+    let content = soapMain ? soapMain.innerText.trim() : '';
+
+    let saveSucceeded = false;
+    try {
+        const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
+        const resp = await fetch(`${backendUrl}/api/fhir/patient/${window.currentPatientId}/document-reference`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ encounterId: window.currentEncounterId, content })
+        });
+        const data = await resp.json();
+        saveSucceeded = !!data.success;
+        if (!saveSucceeded) console.error('[EHR] DocumentReference save failed:', data.error);
+    } catch (e) {
+        console.error('[EHR] DocumentReference save request failed:', e);
+    }
+
     // Show toast notification
 
-    showEHRSaveNotification();
+    showEHRSaveNotification(saveSucceeded);
+
+    if (!saveSucceeded) {
+        // Don't silently proceed as if the note were saved — leave the SOAP modal
+        // open so the clinician can see the failure and retry Approve & Sign.
+        return;
+    }
 
     // Wait for notification, then show completion overlay
 
