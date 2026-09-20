@@ -518,304 +518,6 @@ function expandToSize1() {
 }
 
 
-// ==========================================================================
-
-// FLAG A MOMENT FUNCTIONALITY
-
-// ==========================================================================
-
-let flaggedMoments = [];
-
-let flagCounter = 0;
-
-
-function flagMoment() {
-
-    if (!isConsultationActive) {
-
-        return;
-
-    }
-
-
-    const currentTime = new Date();
-
-    const consultationDuration = currentTime - consultationStartTime - pausedDuration;
-
-    const flagButtonSize2 = document.querySelector('.consultation-overlay-size2 .flag-btn');
-
-    const flagButtonSize1 = document.querySelector('.scribe-control-btn.flag');
-
-
-
-    // Create flag moment object
-
-    const flaggedMoment = {
-
-        id: ++flagCounter,
-
-        timestamp: currentTime,
-
-        consultationTime: consultationDuration,
-
-        formattedTime: formatTime(consultationDuration),
-
-        note: '' // Can be added later
-
-    };
-
-
-    // Add to flagged moments array
-
-    flaggedMoments.push(flaggedMoment);
-
-
-    // Update counter on both buttons
-
-    updateFlagCounter();
-
-
-    // Visual feedback for both size 1 and size 2 overlays
-
-    if (flagButtonSize2) {
-
-        flagButtonSize2.classList.add('flagged');
-
-        setTimeout(() => {
-
-            flagButtonSize2.classList.remove('flagged');
-
-        }, 300);
-
-    }
-
-
-    if (flagButtonSize1) {
-
-        flagButtonSize1.classList.add('flagged');
-
-        setTimeout(() => {
-
-            flagButtonSize1.classList.remove('flagged');
-
-        }, 300);
-
-    }
-
-
-    // Show brief notification
-
-    showFlagNotification(flaggedMoment);
-
-}
-
-
-function updateFlagCounter() {
-
-    const flagButtonSize2 = document.querySelector('.consultation-overlay-size2 .flag-btn');
-
-    const flagButtonSize1 = document.querySelector('.scribe-control-btn.flag');
-
-    const count = flaggedMoments.length;
-
-
-    // Update size 2 overlay button
-
-    if (flagButtonSize2) {
-
-        flagButtonSize2.setAttribute('data-flag-count', count);
-
-        if (count > 0) {
-
-            flagButtonSize2.title = `Flag a Moment (${count} flagged)`;
-
-        } else {
-
-            flagButtonSize2.title = 'Flag a Moment';
-
-        }
-
-    }
-
-
-    // Update size 1 overlay button
-
-    if (flagButtonSize1) {
-
-        flagButtonSize1.setAttribute('data-flag-count', count);
-
-        if (count > 0) {
-
-            flagButtonSize1.title = `Flag a Moment (${count} flagged)`;
-
-        } else {
-
-            flagButtonSize1.title = 'Flag a Moment';
-
-        }
-
-    }
-
-}
-
-
-function clearFlaggedMoments() {
-
-    flaggedMoments = [];
-
-    flagCounter = 0;
-
-    updateFlagCounter(); // Reset counter display
-
-}
-
-
-// Keyboard shortcut for Flag a Moment (Spacebar)
-
-document.addEventListener('keydown', function(event) {
-
-    // Check if spacebar is pressed
-
-    if (event.code === 'Space' || event.keyCode === 32) {
-
-        // Don't trigger if user is typing in an input or textarea
-
-        const activeElement = document.activeElement;
-
-        const isInputField = activeElement && (
-
-            activeElement.tagName === 'INPUT' || 
-
-            activeElement.tagName === 'TEXTAREA' || 
-
-            activeElement.isContentEditable
-
-        );
-
-        
-
-        // Only trigger if consultation is active and not typing
-
-        if (!isInputField && isConsultationActive) {
-
-            event.preventDefault(); // Prevent page scroll
-
-            flagMoment();
-
-        }
-
-    }
-
-});
-
-
-function showFlagNotification(flaggedMoment) {
-
-    // Determine which overlay is active and show notification on that overlay
-
-    const consultationOverlay = document.getElementById('consultationOverlay');
-
-    const consultationOverlaySize2 = document.getElementById('consultationOverlaySize2');
-
-    
-
-    let targetOverlay = null;
-
-    let notificationClass = '';
-
-    let contentClass = '';
-
-    
-
-    // Check which overlay is active
-
-    if (consultationOverlay && consultationOverlay.classList.contains('active')) {
-
-        targetOverlay = consultationOverlay;
-
-        notificationClass = 'flag-notification-size1';
-
-        contentClass = 'flag-notification-size1-content';
-
-    } else if (consultationOverlaySize2 && consultationOverlaySize2.classList.contains('active')) {
-
-        targetOverlay = consultationOverlaySize2;
-
-        notificationClass = 'flag-notification-size2';
-
-        contentClass = 'flag-notification-size2-content';
-
-    }
-
-    
-
-    if (!targetOverlay) return;
-
-
-    // Create notification element
-
-    const notification = document.createElement('div');
-
-    notification.className = notificationClass;
-
-    // nosemgrep: insecure-innerhtml — static SVG + escapeHtml on the only dynamic value (formattedTime)
-    const _html1 = `
-
-        <div class="${contentClass}">
-
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-
-                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-
-                <line x1="4" y1="22" x2="4" y2="15"/>
-
-            </svg>
-
-            <span>Moment flagged at ${escapeHtml(flaggedMoment.formattedTime)}</span>
-
-        </div>
-
-    `;
-    notification.innerHTML = _html1; // nosemgrep: insecure-innerhtml, insecure-document-method
-
-
-    // Add to the appropriate overlay
-
-    // The overlay already has proper positioning context, no need to change it
-
-    targetOverlay.appendChild(notification);
-
-
-    // Animate in
-
-    setTimeout(() => {
-
-        notification.classList.add('show');
-
-    }, 10);
-
-
-    // Remove after 3 seconds
-
-    setTimeout(() => {
-
-        notification.classList.remove('show');
-
-        setTimeout(() => {
-
-            if (notification.parentNode) {
-
-                notification.parentNode.removeChild(notification);
-
-            }
-
-        }, 300);
-
-    }, 3000);
-
-}
-
-
 function formatTime(milliseconds) {
 
     const minutes = Math.floor(milliseconds / 60000);
@@ -904,6 +606,27 @@ function addTranscriptEntry(text, isFinal) {
     }
 }
 
+// Custom visit priorities are authored on the pre-visit page (previsit-iframe.html), which
+// stores them per patient in localStorage. Same origin, so read the same key here.
+function getCustomVisitPriorities(patientId) {
+    if (!patientId) return [];
+    try {
+        const arr = JSON.parse(localStorage.getItem('customVisitPriorities:' + patientId) || '[]');
+        return Array.isArray(arr)
+            ? arr.filter(x => x && (typeof x.title === 'string' || typeof x.description === 'string'))
+                .map(x => ({ title: String(x.title || ''), description: String(x.description || '') }))
+                .filter(x => x.title || x.description)
+            : [];
+    } catch (e) { return []; }
+}
+
+// The iframe is a separate same-origin document, so its edits fire 'storage' here.
+window.addEventListener('storage', function(event) {
+    if (event.key && event.key.startsWith('customVisitPriorities:') && scribePrioritiesVisible) {
+        populateScribePriorities();
+    }
+});
+
 function populateScribePriorities() {
     const content = document.getElementById('prioritiesContent');
     if (!content) return;
@@ -923,10 +646,13 @@ function populateScribePriorities() {
         }
     } catch(e) {}
     
-    if (!priorities) {
+    const customPriorities = getCustomVisitPriorities(window.currentPatientId);
+
+    if (!priorities && !customPriorities.length) {
         content.innerHTML = '<div class="transcript-placeholder">Priorities will appear after patient data loads</div>';
         return;
     }
+    priorities = priorities || {};
     
     let html = '';
     let idx = 0;
@@ -963,6 +689,22 @@ function populateScribePriorities() {
                 </div>
             </div>`;
         });
+    }
+
+    if (customPriorities.length > 0) {
+        html += '<div class="priority-subsection-header">CUSTOM VISIT PRIORITIES</div>';
+        customPriorities.forEach((p, n) => {
+            const id = 'priCustom' + (n + 1);
+            // nosemgrep: insecure-document-method, html-in-template-string, detect-non-literal-regexp, unsafe-formatstring
+            html += `<div class="priority-check-item custom" id="${id}Card">
+                <input type="checkbox" id="${id}Check" onchange="document.getElementById('${id}Card').classList.toggle('checked-off', this.checked)">
+                <div class="priority-check-content">
+                    <div class="priority-check-title">${escapeHtml(p.title)}</div>
+                    ${p.description ? `<div class="priority-check-desc">${escapeHtml(p.description)}</div>` : ''}
+                </div>
+            </div>`;
+        });
+        idx += customPriorities.length;
     }
 
     if (idx === 0) {
@@ -4636,12 +4378,6 @@ function resetScribeInterfaceContent() {
 
             <!-- Toggle Icons Row -->
             <div class="scribe-toggle-row">
-                <button class="scribe-toggle-btn" onclick="flagMoment()" title="Flag a Moment (Spacebar)" data-flag-count="0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-                        <line x1="4" y1="22" x2="4" y2="15"/>
-                    </svg>
-                </button>
                 <button class="scribe-toggle-btn" id="toggleTranscriptBtn" onclick="toggleScribeTranscript()" title="Toggle Live Transcription">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
@@ -4657,11 +4393,6 @@ function resetScribeInterfaceContent() {
                         <path d="M9 14l2 2 4-4"/>
                     </svg>
                 </button>
-            </div>
-            
-            <!-- Keyboard Shortcut Hint -->
-            <div class="keyboard-hint">
-                <kbd>Space</kbd> to flag a moment
             </div>
         `;
 
@@ -4705,13 +4436,7 @@ function startConsultationRecording() {
 
     
 
-    // Reset flag counter and moments
-
-    flaggedMoments = [];
-
-    flagCounter = 0;
-
-    updateFlagCounter();
+    resetAvsEditState();
 
     
 
@@ -4777,13 +4502,7 @@ function actuallyStartConsultation() {
 
     
 
-    // Reset flag counter and moments
-
-    flaggedMoments = [];
-
-    flagCounter = 0;
-
-    updateFlagCounter();
+    resetAvsEditState();
 
     
 
@@ -6342,6 +6061,15 @@ async function fetchAndDisplayAfterVisitSummary() {
     
     if (!contentDiv) return;
     
+    // Clinician edited the summary: show that, not the original from S3.
+    if (window.editedAvs) {
+        const segs = flattenEditedAvs();
+        if (segs.length) {
+            displayAfterVisitSummary({ SummarizedSegments: segs.map(t => ({ Text: t })) });
+            return;
+        }
+    }
+    
     // If no session ID, show default message
     if (!sessionId) {
         contentDiv.innerHTML = `
@@ -6450,6 +6178,12 @@ async function fetchAndPopulatePatientVisitSummary() {
     
     // Populate date and visit type immediately
     populatePatientSummaryMeta();
+    
+    // Already edited in this consultation: keep the clinician's edits.
+    if (window.editedAvs) {
+        applyEditedAvsToDom();
+        return;
+    }
     
     // Show loading state
     if (loadingDiv) loadingDiv.style.display = 'flex';
@@ -6613,6 +6347,234 @@ function toggleSectionVisibility(sectionId, visible) {
     const section = document.getElementById(sectionId);
     if (section) {
         section.style.display = visible ? 'block' : 'none';
+    }
+}
+
+
+// ==========================================================================
+// AFTER VISIT SUMMARY: editing, IDs, and save-to-EHR on Continue
+// ==========================================================================
+
+const AVS_SECTIONS = [
+    { key: 'howYoureDoing', section: 'summaryHowYoureDoing', content: 'summaryHowYoureDoingContent', title: "How you're doing", checklist: false },
+    { key: 'whatsChanging', section: 'summaryWhatsChanging', content: 'summaryWhatsChangingContent', title: "What's changing", checklist: false },
+    { key: 'whatYouCanDo', section: 'summaryWhatYouCanDo', content: 'summaryWhatYouCanDoContent', title: 'What you can do', checklist: true },
+    { key: 'seeYouSoon', section: 'summarySeeYouSoon', content: 'summarySeeYouSoonContent', title: 'See you soon', checklist: false }
+];
+const AVS_ITEM_SELECTOR = '.patient-summary-item, .checklist-item';
+
+window.editedAvs = null;        // { key: [text, ...] } once the clinician has edited/saved
+window.avsSavedFingerprint = null;
+window._avsSaving = false;
+
+function resetAvsEditState() {
+    window.editedAvs = null;
+    window.avsSavedFingerprint = null;
+    window._avsSaving = false;
+    window._soapSaving = false;
+    const content = document.getElementById('patientSummaryContent');
+    if (content) content.classList.remove('avs-editing');
+    document.querySelectorAll('.avs-add-btn').forEach(b => b.remove());
+    setAvsEditLabel(false);
+    setAvsSaveState('idle');
+}
+
+function updateAvsIds() {
+    const set = (id, value, fallback) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value || fallback;
+        el.title = value ? `${value} (click to copy)` : '';
+    };
+    set('patientSummaryPatientId', window.currentPatientId, '—');
+    set('patientSummaryEncounterId', window.currentEncounterId, 'Not linked');
+}
+
+function copyAvsId(el) {
+    const value = (el.title || '').replace(/ \(click to copy\)$/, '');
+    if (!value) return;
+    try { navigator.clipboard.writeText(value); showMinimalNotification('ID copied'); } catch (e) { /* clipboard unavailable */ }
+}
+
+function collectAvsFromDom() {
+    const result = {};
+    AVS_SECTIONS.forEach(sec => {
+        const container = document.getElementById(sec.content);
+        result[sec.key] = container
+            ? Array.from(container.children)
+                .filter(el => el.matches(AVS_ITEM_SELECTOR))
+                .map(el => (el.querySelector(':scope > span:not(.avs-item-delete)')?.textContent || '').replace(/\s+/g, ' ').trim())
+                .filter(Boolean)
+            : [];
+    });
+    return result;
+}
+
+function flattenEditedAvs() {
+    const avs = window.editedAvs || {};
+    return AVS_SECTIONS.flatMap(sec => avs[sec.key] || []);
+}
+
+function buildAvsText(avs) {
+    return AVS_SECTIONS
+        .filter(sec => (avs[sec.key] || []).length)
+        .map(sec => `${sec.title}\n` + avs[sec.key].map(t => `- ${t}`).join('\n'))
+        .join('\n\n');
+}
+
+function applyEditedAvsToDom() {
+    AVS_SECTIONS.forEach(sec => {
+        const items = (window.editedAvs || {})[sec.key] || [];
+        populateSummarySection(sec.content, items, sec.checklist ? 'checklist' : 'list');
+        toggleSectionVisibility(sec.section, items.length > 0);
+    });
+    const loadingDiv = document.getElementById('patientSummaryLoading');
+    const contentDiv = document.getElementById('patientSummaryContent');
+    if (loadingDiv) loadingDiv.style.display = 'none';
+    if (contentDiv) contentDiv.style.display = 'block';
+}
+
+function setAvsEditLabel(editing) {
+    const label = document.getElementById('avsEditToggleLabel');
+    if (label) label.textContent = editing ? 'Done editing' : 'Edit Summary';
+}
+
+function decorateAvsItem(item) {
+    const span = item.querySelector(':scope > span');
+    if (!span) return;
+    span.setAttribute('contenteditable', 'true');
+    span.setAttribute('role', 'textbox');
+    if (!item.querySelector(':scope > .avs-item-delete')) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'avs-item-delete';
+        del.setAttribute('contenteditable', 'false');
+        del.setAttribute('aria-label', 'Delete item');
+        del.textContent = '×';
+        del.addEventListener('click', () => item.remove());
+        item.appendChild(del);
+    }
+}
+
+function addAvsItem(key) {
+    const sec = AVS_SECTIONS.find(s => s.key === key);
+    const container = sec && document.getElementById(sec.content);
+    if (!container) return;
+    const item = document.createElement('div');
+    item.className = sec.checklist ? 'checklist-item' : 'patient-summary-item';
+    if (sec.checklist) {
+        const box = document.createElement('div');
+        box.className = 'checkbox-wrapper';
+        box.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>'; // nosemgrep: insecure-innerhtml — static literal, no user data
+        item.appendChild(box);
+    }
+    item.appendChild(document.createElement('span'));
+    container.appendChild(item);
+    decorateAvsItem(item);
+    item.querySelector(':scope > span').focus();
+}
+
+function toggleAvsEditMode() {
+    const content = document.getElementById('patientSummaryContent');
+    if (!content) return;
+    const editing = content.classList.toggle('avs-editing');
+    setAvsEditLabel(editing);
+
+    if (editing) {
+        AVS_SECTIONS.forEach(sec => {
+            toggleSectionVisibility(sec.section, true);
+            const container = document.getElementById(sec.content);
+            if (!container) return;
+            Array.from(container.children).filter(el => el.matches(AVS_ITEM_SELECTOR)).forEach(decorateAvsItem);
+            if (!container.parentElement.querySelector(`.avs-add-btn[data-key="${sec.key}"]`)) {
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'avs-add-btn';
+                add.dataset.key = sec.key;
+                add.textContent = '+ Add item';
+                add.addEventListener('click', () => addAvsItem(sec.key));
+                container.after(add);
+            }
+        });
+        const firstSpan = content.querySelector('[contenteditable="true"]');
+        if (firstSpan) firstSpan.focus();
+        return;
+    }
+
+    // Leaving edit mode: rebuild clean items from what was typed, hide empty sections.
+    window.editedAvs = collectAvsFromDom();
+    document.querySelectorAll('.avs-add-btn').forEach(b => b.remove());
+    applyEditedAvsToDom();
+    if (window.avsSavedFingerprint !== null && buildAvsText(window.editedAvs) !== window.avsSavedFingerprint) {
+        setAvsSaveState('idle', 'Edited since last save');
+    }
+}
+
+function setAvsSaveState(state, message) {
+    const btn = document.getElementById('avsContinueBtn');
+    const label = document.getElementById('avsContinueLabel');
+    const status = document.getElementById('avsSaveStatus');
+    if (btn) btn.disabled = state === 'saving';
+    if (label) label.textContent = state === 'saving' ? 'Saving\u2026' : 'Continue';
+    if (status) {
+        status.textContent = message || '';
+        status.className = 'avs-save-status' + (state === 'saved' ? ' ok' : state === 'error' ? ' error' : '');
+    }
+}
+
+// Continue: save the (possibly edited) After Visit Summary to the EHR first, then move on.
+// If the save fails the clinician stays on this screen with the error and can retry.
+async function continueAfterVisitSummary() {
+    if (window._avsSaving) return;
+    const saved = await saveAvsToEhr();
+    if (saved) showFinalCompletionOverlay();
+}
+
+// Returns true when there is nothing left to save (saved now, already saved, or nothing to save).
+async function saveAvsToEhr() {
+    if (window._avsSaving) return false;
+
+    // Commit any in-progress edits first.
+    const content = document.getElementById('patientSummaryContent');
+    if (content && content.classList.contains('avs-editing')) toggleAvsEditMode();
+
+    const avs = window.editedAvs || collectAvsFromDom();
+    const text = buildAvsText(avs);
+    if (!text || !window.currentPatientId) return true;   // nothing to save / no patient to save to
+    if (window.avsSavedFingerprint === text) return true;  // unchanged since the last successful save
+
+    window._avsSaving = true;
+    setAvsSaveState('saving', 'Saving to HealthLake\u2026');
+    const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
+    try {
+        const resp = await fetch(`${backendUrl}/api/fhir/patient/${encodeURIComponent(window.currentPatientId)}/document-reference`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind: 'avs', encounterId: window.currentEncounterId || '', content: text })
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Save failed');
+
+        let message = 'Saved to EHR.';
+        if (window.currentEncounterId) {
+            try {
+                const fin = await fetch(`${backendUrl}/api/fhir/encounter/${encodeURIComponent(window.currentEncounterId)}/finish`, { method: 'POST' });
+                const finData = await fin.json();
+                if (!finData.success) message = 'Saved to EHR, but the encounter could not be marked finished.';
+            } catch (e) {
+                message = 'Saved to EHR, but the encounter could not be marked finished.';
+            }
+        }
+        window.editedAvs = avs;
+        window.avsSavedFingerprint = text;
+        setAvsSaveState('saved', message);
+        return true;
+    } catch (e) {
+        console.error('[EHR] AVS save failed:', e);
+        setAvsSaveState('error', 'Could not save to the EHR. Click Continue to try again.');
+        return false;
+    } finally {
+        window._avsSaving = false;
     }
 }
 
@@ -7453,6 +7415,10 @@ async function approveSoapNotes() {
 
     console.log('approveSoapNotes called');
 
+    // Approve & Sign can fire twice (double click / two buttons) — only save once.
+    if (window._soapSaving) return;
+    window._soapSaving = true;
+
     // Build the content to persist from the live (possibly clinician-edited) SOAP
     // note DOM, not the original fetched clinicalDoc object.
     const soapMain = document.querySelector('.soap-notes-main');
@@ -7478,6 +7444,7 @@ async function approveSoapNotes() {
     showEHRSaveNotification(saveSucceeded);
 
     if (!saveSucceeded) {
+        window._soapSaving = false;
         // Don't silently proceed as if the note were saved — leave the SOAP modal
         // open so the clinician can see the failure and retry Approve & Sign.
         return;
@@ -8164,10 +8131,6 @@ function switchTab(tabName) {
     } else if (tabName === 'transcript') {
 
         document.getElementById('transcriptTab').classList.add('active');
-
-    } else if (tabName === 'flagged') {
-
-        document.getElementById('flaggedTab').classList.add('active');
 
     }
 
@@ -10176,6 +10139,7 @@ function updateFollowUpAfterSMS() {
  * Populate Patient Visit Summary date and visit type
  */
 function populatePatientSummaryMeta() {
+    updateAvsIds();
     const dateEl = document.getElementById('patientSummaryDate');
     const visitTypeEl = document.getElementById('patientSummaryVisitType');
     

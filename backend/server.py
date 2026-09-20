@@ -119,6 +119,32 @@ def _extract_condition_fields(resource):
     return meta
 
 
+def _extract_medication_fields(resource):
+    """Shared MedicationRequest field extraction, used for both single-GET and evidence-lookup rows."""
+    meta = {}
+    med = resource.get("medicationCodeableConcept", {})
+    meta["name"] = med.get("text") or (med.get("coding", [{}])[0].get("display") if med.get("coding") else None) or "Unknown"
+    # NDC code
+    if med.get("coding"):
+        meta["code"] = med["coding"][0].get("code", "")
+        meta["codeSystem"] = med["coding"][0].get("system", "")
+    dosage = resource.get("dosageInstruction", [{}])
+    if dosage and isinstance(dosage, list) and len(dosage) > 0:
+        meta["dosage"] = dosage[0].get("text", "")
+        route = dosage[0].get("route", {})
+        if route.get("coding"):
+            meta["route"] = route["coding"][0].get("code", "")
+    # Dispense details
+    dispense = resource.get("dispenseRequest", {})
+    if dispense.get("quantity", {}).get("value") is not None:
+        meta["quantity"] = dispense["quantity"]["value"]
+    if "numberOfRepeatsAllowed" in dispense:
+        meta["refills"] = dispense["numberOfRepeatsAllowed"]
+    meta["status"] = resource.get("status")
+    meta["date"] = resource.get("authoredOn")
+    return meta
+
+
 def _extract_observation_fields(resource):
     """Shared Observation field extraction, used for both single-GET and search-result rows."""
     meta = {}
@@ -697,24 +723,7 @@ def get_fhir_resource(resource_type, resource_id):
 
         # MedicationRequest
         elif resource_type == "MedicationRequest":
-            med = resource.get("medicationCodeableConcept", {})
-            meta["name"] = med.get("text") or (med.get("coding", [{}])[0].get("display") if med.get("coding") else None) or "Unknown"
-            # NDC code
-            if med.get("coding"):
-                meta["code"] = med["coding"][0].get("code", "")
-                meta["codeSystem"] = med["coding"][0].get("system", "")
-            dosage = resource.get("dosageInstruction", [{}])
-            if dosage and isinstance(dosage, list) and len(dosage) > 0:
-                meta["dosage"] = dosage[0].get("text", "")
-                route = dosage[0].get("route", {})
-                if route.get("coding"):
-                    meta["route"] = route["coding"][0].get("code", "")
-            # Dispense details
-            dispense = resource.get("dispenseRequest", {})
-            if dispense.get("quantity", {}).get("value") is not None:
-                meta["quantity"] = dispense["quantity"]["value"]
-            if "numberOfRepeatsAllowed" in dispense:
-                meta["refills"] = dispense["numberOfRepeatsAllowed"]
+            meta.update(_extract_medication_fields(resource))
 
         # Condition
         elif resource_type == "Condition":
@@ -847,6 +856,54 @@ def get_patient_fhir_summary(patient_id):
         return _safe_error(e, "get_patient_fhir_summary")
 
 
+@app.route('/api/fhir/patient/<patient_id>/resources', methods=['GET'])
+def get_patient_fhir_resources(patient_id):
+    """Compact list of a patient's Observation/MedicationRequest/Condition/Encounter resources.
+
+    The Patient Insights job cites evidence with its own sequential IDs (e.g.
+    "Observation/14"), not HealthLake IDs, so the pre-visit page can't resolve them
+    directly — it matches the cited narrative text against this list instead.
+    """
+    import re
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not re.match(r'^[a-zA-Z0-9\-]+$', patient_id):
+        return jsonify({"success": False, "error": "Invalid patient ID"}), 400
+
+    # Demo cache references the original datastore's IDs; nothing to resolve against here.
+    if is_demo_request():
+        return jsonify({"success": False, "error": "Not available in demo mode"})
+
+    resource_types = ["Observation", "MedicationRequest", "Condition", "Encounter"]
+
+    def fetch(resource_type):
+        query = f"{resource_type}?patient={patient_id}&_count=100"
+        response = _healthlake_request(query)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, patient_id is regex-validated, resource_type is from a fixed list
+        if response.status_code != 200:
+            raise RuntimeError(f"HealthLake returned {response.status_code} for {resource_type}")
+        rows = []
+        for entry in response.json().get('entry', []):
+            resource = entry.get('resource', {})
+            if resource_type == "Observation":
+                fields = _extract_observation_fields(resource)
+            elif resource_type == "MedicationRequest":
+                fields = _extract_medication_fields(resource)
+            elif resource_type == "Condition":
+                fields = _extract_condition_fields(resource)
+            else:
+                fields = {"date": resource.get("period", {}).get("start"), "status": resource.get("status")}
+            fields['id'] = resource.get('id', '')
+            rows.append(fields)
+        return resource_type, rows
+
+    try:
+        with ThreadPoolExecutor(max_workers=len(resource_types)) as pool:
+            results = dict(pool.map(fetch, resource_types))
+        return jsonify({"success": True, "patientId": patient_id, "resources": results})
+    except Exception as e:
+        return _safe_error(e, "get_patient_fhir_resources")
+
+
 @app.route('/api/streaming/session/start', methods=['POST'])
 def start_streaming_session():
     """Create a FHIR Encounter in HealthLake linking a new consultation session to
@@ -896,11 +953,18 @@ def start_streaming_session():
         return _safe_error(e, "start_streaming_session")
 
 
+# kind -> (LOINC code, display) for DocumentReference.type
+DOCUMENT_KINDS = {
+    "soap": ("34117-2", "History and physical note"),
+    "avs": ("69730-0", "Instructions"),
+}
+
+
 @app.route('/api/fhir/patient/<patient_id>/document-reference', methods=['POST'])
 def create_document_reference(patient_id):
-    """Write an approved SOAP note back to HealthLake as a FHIR DocumentReference,
-    optionally linked to the Encounter created at session start. This is the only
-    place a consultation produces a durable change to the patient's HealthLake chart.
+    """Write an approved SOAP note (kind="soap", default) or After Visit Summary
+    (kind="avs") back to HealthLake as a FHIR DocumentReference, optionally linked to
+    the Encounter created at session start.
     """
     import re
     import base64
@@ -912,7 +976,10 @@ def create_document_reference(patient_id):
     data = request.get_json(silent=True) or {}
     content = data.get('content', '')
     encounter_id = data.get('encounterId', '')
+    kind = data.get('kind', 'soap')
 
+    if kind not in DOCUMENT_KINDS:
+        return jsonify({"success": False, "error": "Invalid kind"}), 400
     if not content or not content.strip():
         return jsonify({"success": False, "error": "content is required"}), 400
     if encounter_id and not re.match(r'^[a-zA-Z0-9\-]+$', encounter_id):
@@ -921,14 +988,15 @@ def create_document_reference(patient_id):
     if is_demo_request():
         return jsonify({"success": True, "documentReferenceId": f"demo-docref-{patient_id[:8]}"})
 
+    loinc_code, loinc_display = DOCUMENT_KINDS[kind]
     document_reference = {
         "resourceType": "DocumentReference",
         "status": "current",
         "type": {
             "coding": [{
                 "system": "http://loinc.org",
-                "code": "34117-2",
-                "display": "History and physical note"
+                "code": loinc_code,
+                "display": loinc_display
             }]
         },
         "subject": {"reference": f"Patient/{patient_id}"},
@@ -953,6 +1021,39 @@ def create_document_reference(patient_id):
 
     except Exception as e:
         return _safe_error(e, "create_document_reference")
+
+
+@app.route('/api/fhir/encounter/<encounter_id>/finish', methods=['POST'])
+def finish_encounter(encounter_id):
+    """Mark a session Encounter as finished with an end time (it is created
+    in-progress at consultation start and otherwise never closed)."""
+    import re
+    from datetime import datetime, timezone
+
+    if not re.match(r'^[a-zA-Z0-9\-]+$', encounter_id):
+        return jsonify({"success": False, "error": "Invalid encounter ID"}), 400
+
+    if is_demo_request():
+        return jsonify({"success": True, "encounterId": encounter_id})
+
+    try:
+        response = _healthlake_request(f"Encounter/{encounter_id}")  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, encounter_id is regex-validated
+        if response.status_code != 200:
+            return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
+
+        encounter = response.json()
+        encounter["status"] = "finished"
+        period = encounter.get("period") or {}
+        period["end"] = datetime.now(timezone.utc).isoformat()
+        encounter["period"] = period
+
+        update = _healthlake_request(f"Encounter/{encounter_id}", method='PUT', body=encounter)  # nosemgrep: ssrf-requests — same fixed host, regex-validated id
+        if update.status_code not in (200, 201):
+            return jsonify({"success": False, "error": f"HealthLake returned {update.status_code}"}), update.status_code
+        return jsonify({"success": True, "encounterId": encounter_id})
+
+    except Exception as e:
+        return _safe_error(e, "finish_encounter")
 
 
 # =============================================================================

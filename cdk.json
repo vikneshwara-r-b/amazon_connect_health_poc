@@ -117,6 +117,6 @@
     "frontendBucketName": "",
     "demoUserEmail": "connecthealth_demo@example.com",
     "enableCognito": "true",
-    "useCloudFront": "false"
+    "useCloudFront": "true"
   }
 }

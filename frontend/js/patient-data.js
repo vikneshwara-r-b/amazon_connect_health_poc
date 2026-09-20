@@ -112,15 +112,31 @@
         }
         const sorted = [...results].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         const rows = sorted.map(r => `
-            <div class="section-detail" style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between;">
-                <span>${escapeHtml(r.name || 'Unknown')}</span>
-                <span>${escapeHtml(r.value)} ${escapeHtml(r.unit || '')}</span>
-                <span>${escapeHtml(formatDate(r.date))}</span>
-            </div>`).join('');
+                <tr>
+                    <td>${escapeHtml(r.name || 'Unknown')}</td>
+                    <td class="lab-history-num">${escapeHtml(r.value ?? '')}</td>
+                    <td>${escapeHtml(r.unit || '')}</td>
+                    <td>${escapeHtml(formatDate(r.date))}</td>
+                    <td>${escapeHtml(r.status || '')}</td>
+                </tr>`).join('');
         pane.innerHTML = `
             <div class="section">
                 <div class="section-header">Lab results — full history</div>
-                <div class="section-content" style="padding: 0;">${rows}</div>
+                <div class="section-content" style="padding: 0;">
+                    <table class="lab-history-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Test</th>
+                                <th scope="col" class="lab-history-num">Result</th>
+                                <th scope="col">Unit</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}
+                        </tbody>
+                    </table>
+                </div>
             </div>`;
     }
 

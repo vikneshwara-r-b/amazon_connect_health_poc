@@ -2148,22 +2148,6 @@
             color: #374151;
         }
 
-        .consultation-overlay-size2 .flag-btn {
-            color: #6b7280;
-        }
-
-        .consultation-overlay-size2 .flag-btn:hover {
-            background: rgba(107, 114, 128, 0.12);
-            border-color: rgba(107, 114, 128, 0.25);
-            color: #4b5563;
-        }
-
-        .consultation-overlay-size2 .flag-btn.flagged {
-            background: rgba(107, 114, 128, 0.12);
-            color: #4b5563;
-            animation: flagPulse 0.3s ease-out;
-        }
-
         /* Ripple effect for button clicks */
         .consultation-overlay-size2 .control-btn::before {
             content: '';
@@ -2187,223 +2171,17 @@
             transition: width 0.1s ease, height 0.1s ease, opacity 0.1s ease;
         }
 
-        /* Flag Counter Badge for Size 2 Overlay */
-        .consultation-overlay-size2 .flag-btn {
-            position: relative;
-        }
-
-        .consultation-overlay-size2 .flag-btn::after {
-            content: attr(data-flag-count);
-            position: absolute;
-            top: -2px;
-            right: -2px;
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            color: white;
-            font-size: 8px;
-            font-weight: 600;
-            line-height: 1;
-            padding: 0;
-            border-radius: 50%;
-            width: 14px;
-            height: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 
-                0 2px 6px rgba(239, 68, 68, 0.4),
-                0 1px 2px rgba(0, 0, 0, 0.2);
-            opacity: 0;
-            transform: scale(0.8);
-            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-            border: 2px solid rgba(255, 255, 255, 1);
-            z-index: 15;
-        }
-
-        .consultation-overlay-size2 .flag-btn[data-flag-count]:not([data-flag-count="0"])::after {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        .consultation-overlay-size2 .flag-btn[data-flag-count="0"]::after {
-            display: none;
-        }
-
-        @keyframes flagPulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-
-        /* ==========================================================================
-           FLAG NOTIFICATION POPUP STYLING - CONTEXTUAL TO EACH OVERLAY
-           ========================================================================== */
-        
-        /* Size 1 Overlay Flag Notification - Top of overlay */
-        .flag-notification-size1 {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            color: #374151;
-            padding: 10px 16px;
-            border-radius: 12px;
-            border: 1px solid rgba(0, 0, 0, 0.06);
-            box-shadow: 
-                0 8px 32px rgba(0, 0, 0, 0.08),
-                0 4px 16px rgba(0, 0, 0, 0.04),
-                inset 0 1px 0 rgba(255, 255, 255, 0.9);
-            z-index: 15;
-            opacity: 0;
-            transform: translateX(-50%) translateY(-12px) scale(0.92);
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-            min-width: 200px;
-            max-width: 280px;
-            pointer-events: none;
-            white-space: nowrap;
-        }
-
-        .flag-notification-size1.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0) scale(1);
-        }
-
-        .flag-notification-size1-content {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            justify-content: center;
-        }
-
-        .flag-notification-size1-content svg {
-            flex-shrink: 0;
-            color: #10b981;
-            filter: none;
-        }
-
-        .flag-notification-size1-content span {
-            font-size: 13px;
-            font-weight: 500;
-            line-height: 1.3;
-            color: #374151;
-            text-shadow: none;
-        }
-
-        .flag-notification-size1::before {
-            content: '';
-            position: absolute;
-            top: -1px;
-            left: -1px;
-            right: -1px;
-            bottom: -1px;
-            background: linear-gradient(135deg, 
-                rgba(16, 185, 129, 0.08) 0%,
-                rgba(255, 255, 255, 0.02) 50%,
-                rgba(16, 185, 129, 0.08) 100%);
-            border-radius: 13px;
-            z-index: -1;
-            opacity: 0;
-            animation: subtleGlowSize1 4s ease-in-out infinite;
-        }
-
         @keyframes subtleGlowSize1 {
             0%, 100% { opacity: 0; }
             50% { opacity: 0.4; }
-        }
-
-        /* Size 2 Overlay Flag Notification - Above the compact overlay */
-        .flag-notification-size2 {
-            position: absolute;
-            top: -45px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            color: #374151;
-            padding: 6px 12px;
-            border-radius: 8px;
-            border: 1px solid rgba(0, 0, 0, 0.06);
-            box-shadow: 
-                0 4px 20px rgba(0, 0, 0, 0.08),
-                0 2px 8px rgba(0, 0, 0, 0.04),
-                inset 0 1px 0 rgba(255, 255, 255, 0.9);
-            z-index: 15;
-            opacity: 0;
-            transform: translateX(-50%) translateY(-8px) scale(0.9);
-            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-            min-width: 140px;
-            max-width: 200px;
-            pointer-events: none;
-            white-space: nowrap;
-        }
-
-        .flag-notification-size2.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0) scale(1);
-        }
-
-        .flag-notification-size2-content {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            justify-content: center;
-        }
-
-        .flag-notification-size2-content svg {
-            flex-shrink: 0;
-            color: #10b981;
-            filter: none;
-        }
-
-        .flag-notification-size2-content span {
-            font-size: 11px;
-            font-weight: 500;
-            line-height: 1.3;
-            color: #374151;
-            text-shadow: none;
-        }
-
-        .flag-notification-size2::before {
-            content: '';
-            position: absolute;
-            top: -1px;
-            left: -1px;
-            right: -1px;
-            bottom: -1px;
-            background: linear-gradient(135deg, 
-                rgba(16, 185, 129, 0.08) 0%,
-                rgba(255, 255, 255, 0.02) 50%,
-                rgba(16, 185, 129, 0.08) 100%);
-            border-radius: 9px;
-            z-index: -1;
-            opacity: 0;
-            animation: subtleGlowSize2 4s ease-in-out infinite;
         }
 
         @keyframes subtleGlowSize2 {
             0%, 100% { opacity: 0; }
             50% { opacity: 0.3; }
         }
-
         /* Arrow for Size 2 notification pointing down to overlay */
-        .flag-notification-size2::after {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 4px solid rgba(255, 255, 255, 0.96);
-            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.06));
-        }
+
 
         /* ==========================================================================
            EHR SAVE NOTIFICATION
@@ -4488,70 +4266,6 @@
             color: #7c3aed;
         }
 
-        .scribe-control-btn.flag {
-            color: #6b7280;
-        }
-
-        .scribe-control-btn.flag:hover {
-            background: rgba(107, 114, 128, 0.08);
-            border-color: rgba(107, 114, 128, 0.2);
-            color: #4b5563;
-            transform: none; /* Prevent flag button from moving on hover to avoid overlay shift */
-        }
-
-        .scribe-control-btn.flag.flagged {
-            background: rgba(107, 114, 128, 0.12);
-            border-color: rgba(107, 114, 128, 0.2);
-            color: #4b5563;
-            animation: flagPulse 0.3s ease-out;
-        }
-
-        .scribe-control-btn.flag:active {
-            transform: none; /* Prevent any movement on click */
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-        }
-
-        /* Flag Counter Badge for Size 1 Overlay */
-        .scribe-control-btn.flag {
-            position: relative;
-        }
-
-        .scribe-control-btn.flag::after {
-            content: attr(data-flag-count);
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            color: white;
-            font-size: 9px;
-            font-weight: 600;
-            line-height: 1;
-            padding: 0;
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 
-                0 2px 8px rgba(239, 68, 68, 0.4),
-                0 1px 3px rgba(0, 0, 0, 0.2);
-            opacity: 0;
-            transform: scale(0.8);
-            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-            border: 2px solid rgba(255, 255, 255, 1);
-            z-index: 20;
-        }
-
-        .scribe-control-btn.flag[data-flag-count]:not([data-flag-count="0"])::after {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        .scribe-control-btn.flag[data-flag-count="0"]::after {
-            display: none;
-        }
-
         .scribe-control-btn.stop {
             background: rgba(239, 68, 68, 0.08);
             border-color: rgba(239, 68, 68, 0.2);
@@ -4567,33 +4281,6 @@
         .scribe-control-btn svg {
             width: 20px;
             height: 20px;
-        }
-
-        /* Keyboard Shortcut Hint */
-        .keyboard-hint {
-            margin-top: 16px;
-            text-align: center;
-            font-size: 12px;
-            color: #9ca3af;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-
-        .keyboard-hint kbd {
-            display: inline-block;
-            padding: 4px 8px;
-            background: #f3f4f6;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, monospace;
-            font-size: 11px;
-            font-weight: 600;
-            color: #6b7280;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            line-height: 1;
         }
 
         /* Scribe Control Button Labels */
@@ -4786,6 +4473,7 @@
         }
         .priority-check-item.high::before { background: #ef4444; }
         .priority-check-item.moderate::before { background: #f59e0b; }
+        .priority-check-item.custom::before { background: #0ea5e9; opacity: 0.7; }
         .priority-check-item:hover {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
             transform: translateY(-1px);
@@ -7632,10 +7320,6 @@
     margin-top: 10px;
 }
 
-.scribe-controls-column .keyboard-hint {
-    margin-top: 10px;
-}
-
 /* Override the old scribe-interface styles for two-column layout */
 .scribe-two-column-layout .scribe-interface {
     max-width: none;
@@ -8256,3 +7940,90 @@
     font-weight: 600;
     box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
 }
+
+        .lab-history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .lab-history-table th,
+        .lab-history-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .lab-history-table thead th {
+            position: sticky;
+            top: 0;
+            background: #f8f9fb;
+            font-weight: 600;
+            color: #4b5563;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .lab-history-table .lab-history-num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .lab-history-table tbody tr:hover {
+            background: #fafafa;
+        }
+
+        /* --- After Visit Summary: IDs, edit mode, save status --- */
+        .avs-id {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11px;
+            color: #374151;
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: copy;
+        }
+        .avs-save-status {
+            font-size: 12px;
+            color: #6b7280;
+            align-self: center;
+            margin-right: 4px;
+        }
+        .avs-save-status.error { color: #dc2626; }
+        .avs-save-status.ok { color: #16a34a; }
+
+        #patientSummaryContent.avs-editing .patient-summary-item,
+        #patientSummaryContent.avs-editing .checklist-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        #patientSummaryContent.avs-editing [contenteditable="true"] {
+            flex: 1;
+            outline: 1px dashed #a78bfa;
+            outline-offset: 2px;
+            border-radius: 4px;
+            padding: 2px 4px;
+            background: #faf5ff;
+            cursor: text;
+        }
+        #patientSummaryContent.avs-editing [contenteditable="true"]:focus {
+            outline: 2px solid #8b5cf6;
+            background: #ffffff;
+        }
+        .avs-item-delete,
+        .avs-add-btn {
+            border: none;
+            background: transparent;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .avs-item-delete { font-size: 18px; line-height: 1; padding: 0 4px; }
+        .avs-item-delete:hover { color: #dc2626; }
+        .avs-add-btn {
+            margin-top: 6px;
+            color: #7c3aed;
+            font-weight: 500;
+            padding: 4px 0;
+        }
+        .avs-add-btn:hover { text-decoration: underline; }

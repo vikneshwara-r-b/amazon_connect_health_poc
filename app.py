@@ -62,9 +62,18 @@ enable_cognito = get_context(app, "enableCognito", "true").lower() == "true"
 use_cloudfront = get_context(app, "useCloudFront", "true").lower() == "true"
 
 # A single Vpc.from_lookup call, shared by both service stacks, so synth doesn't
-# do the default-VPC context lookup twice for the same account/region.
+# do the VPC context lookup twice for the same account/region. Defaults to the
+# account's default VPC; pass `-c vpcId=vpc-...` for accounts that have no default
+# VPC (the failed lookup otherwise surfaces as bogus 'vpc-12345'/'s-12345'
+# CloudFormation validation errors on every downstream resource). The chosen VPC
+# needs >= 2 public subnets in different AZs -- the ALBs and the ECS tasks
+# (assign_public_ip=True) are placed in public subnets.
+vpc_id = get_context(app, "vpcId") or None
 network_stack = cdk.Stack(app, "AmazonConnectHealthNetwork", env=env)
-vpc = ec2.Vpc.from_lookup(network_stack, "DefaultVpc", is_default=True)
+if vpc_id:
+    vpc = ec2.Vpc.from_lookup(network_stack, "DefaultVpc", vpc_id=vpc_id)
+else:
+    vpc = ec2.Vpc.from_lookup(network_stack, "DefaultVpc", is_default=True)
 
 prereqs_stack = ConnectHealthResourcesStack(
     app,
