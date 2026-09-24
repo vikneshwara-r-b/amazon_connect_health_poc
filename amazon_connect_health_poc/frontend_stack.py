@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from aws_cdk import (
+    CfnOutput,
     RemovalPolicy,
     Stack,
     aws_cloudfront as cloudfront,
@@ -175,4 +176,15 @@ class FrontendStack(Stack):
             ],
             destination_bucket=bucket,
             **deployment_kwargs,
+        )
+
+        # Named so it's unambiguous in `cdk deploy` output / the CloudFormation
+        # console -- this is the CloudFront domain when use_cloudfront=True, or the
+        # S3 static website URL in bypass mode (not the backend/streaming URLs,
+        # which are separate stacks/outputs).
+        CfnOutput(
+            self,
+            "FrontendUrl",
+            value=self.site_url,
+            description="Frontend URL (CloudFront domain, or S3 website URL in bypass mode)",
         )

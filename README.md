@@ -22,7 +22,7 @@ Frontend            Backend               Streaming
 
 Two topologies, controlled by one `cdk.json` flag (`useCloudFront`):
 - **`useCloudFront: true`** (production-shaped): CloudFront in front of all three components — HTTPS for the frontend, an HTTPS proxy in front of the backend ALB, a WSS proxy in front of the streaming ALB.
-- **`useCloudFront: false`** (bypass mode): no CloudFront at all — frontend served via S3 static website hosting, backend/streaming reached directly via their ALBs over plain HTTP/WS. Useful when an AWS account is waiting on CloudFront's account-verification gate (a real restriction new/low-usage accounts can hit) or just for quick sandbox testing. **No TLS anywhere in this mode** — fine for temporary testing, not for sharing beyond that.
+- **`useCloudFront: false`** (bypass mode): no CloudFront at all — frontend served via S3 static website hosting, backend/streaming reached directly via their ALBs over plain HTTP/WS. Useful for quick sandbox testing. **No TLS anywhere in this mode** — fine for temporary testing, not for sharing beyond that.
 
 ### CDK stacks (`amazon_connect_health_poc/`)
 
@@ -161,7 +161,6 @@ Issues hit and fixed while building this CDK port — worth checking first if so
 
 | Symptom | Cause |
 |---|---|
-| `CREATE_FAILED` on any `AWS::CloudFront::Distribution` — "Your account must be verified" | Account-wide CloudFront restriction on new/low-usage accounts (contact AWS Support, or set `useCloudFront: false` as a stopgap) |
 | Frontend loads but "Loading patients..." hangs forever, zero backend log activity | In bypass mode, the ALB security group must allow `0.0.0.0/0` — a leftover CloudFront-only rule silently drops the browser's connection at the SG level |
 | `AccessDeniedException: ... health-agent:CreateDomain ...` | The Connect Health IAM action/ARN prefix is `health-agent`, not `connecthealth` (the latter is only the boto3 SDK client id) |
 | `UnknownServiceError: Unknown service: 'healthagent'` | `boto3.client('healthagent')` is invalid — the correct id is `connecthealth` |
@@ -195,13 +194,20 @@ cdk destroy --profile <your-profile> -c vpcId=<vpc-id-if-you-used-one> -c demoUs
 
 S3 buckets and CloudWatch log groups are configured to auto-delete with their stacks (`RemovalPolicy.DESTROY` + `auto_delete_objects=True`) — no manual emptying needed, unlike the original CloudFormation guide.
 
-**Removing just the HealthLake datastore** (to stop its hourly charge):
-- **CDK route:** `cdk destroy ... AmazonConnectHealthPrereqs` deletes the datastore, but that stack also holds the Connect Health Domain and Subscription, and CDK removes every stack that depends on it too (Backend, Streaming, both CloudFront stacks, Frontend). There is no CDK command that deletes only the datastore.
-- **CLI route** (keeps everything else; **irreversible**, no backups):
-  ```bash
-  aws healthlake delete-fhir-datastore --datastore-id <datastore-id> --profile <your-profile> --region us-east-1
-  ```
-  This leaves the `AmazonConnectHealthPrereqs` stack out of sync with reality, so a later `cdk deploy` can fail on that resource. To bring a datastore back, recreate it through CDK; the new datastore gets a **new ID**, so redeploy the Backend stack and re-run the [sample-data load](#after-deployment-load-sample-fhir-data-into-healthlake).
+**Removing just HealthLake + the Connect Health Domain/Subscription** (`AmazonConnectHealthPrereqs` — the costly, disposable resources: HealthLake bills hourly + storage for as long as it exists) **without touching Backend/Streaming/Frontend/Cognito**:
+
+```bash
+cdk destroy --profile <your-profile> AmazonConnectHealthPrereqs
+```
+
+This works on its own — `AmazonConnectHealthPrereqs` publishes its IDs to SSM Parameter Store rather than handing them directly to the other stacks, so there's no CloudFormation export tying its lifecycle to theirs. Backend/Streaming keep running throughout, though anything that calls HealthLake or Connect Health will error until the datastore/domain/subscription exist again (expected — same as a brief outage of those two services).
+
+**To bring it back:**
+```bash
+cdk deploy --profile <your-profile> -c vpcId=<vpc-id-if-you-used-one> -c demoUserPassword=<pw> AmazonConnectHealthPrereqs
+cdk deploy --profile <your-profile> -c vpcId=<vpc-id-if-you-used-one> -c demoUserPassword=<pw> AmazonConnectHealthBackend AmazonConnectHealthStreaming
+```
+The second command is required: Backend/Streaming only pick up the *new* datastore/domain/subscription IDs (via SSM) when they're redeployed — their ECS task environment variables are set at deploy time, not re-read live. Recreating gets a **new datastore ID**, so re-run the [sample-data load](#after-deployment-load-sample-fhir-data-into-healthlake) afterwards.
 
 ## Security notes
 

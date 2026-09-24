@@ -11,6 +11,7 @@ from aws_cdk import (
     aws_iam as iam,
     aws_logs as logs,
     aws_s3 as s3,
+    aws_ssm as ssm,
 )
 from constructs import Construct
 
@@ -34,8 +35,6 @@ class BackendStack(Stack):
         *,
         vpc: ec2.IVpc,
         environment: str = "dev",
-        healthlake_datastore_id: str,
-        domain_id: str,
         # No "runtime." prefix -- botocore adds it automatically via a hostPrefix
         # trait on StartPatientInsightsJob/GetPatientInsightsJob; including it here
         # too doubles it and breaks DNS resolution (see backend/config.py).
@@ -47,6 +46,18 @@ class BackendStack(Stack):
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Read from SSM (published by ConnectHealthResourcesStack) rather than a
+        # direct CDK cross-stack reference -- see that stack's docstring: a direct
+        # reference becomes a CloudFormation export that blocks destroying it on
+        # its own, which matters because it holds the (costly, disposable)
+        # HealthLake datastore.
+        healthlake_datastore_id = ssm.StringParameter.value_for_string_parameter(
+            self, f"/connect-health/{environment}/healthlakeDatastoreId"
+        )
+        domain_id = ssm.StringParameter.value_for_string_parameter(
+            self, f"/connect-health/{environment}/domainId"
+        )
 
         # Output bucket for Patient Insights + streaming output. The source template
         # can optionally accept an existing bucket name; a from-scratch CDK app has no

@@ -25,8 +25,6 @@ def test_backend_task_definition_container_port():
         "Backend",
         env=ENV,
         vpc=vpc,
-        healthlake_datastore_id="fake-datastore-id",
-        domain_id="dom-fake",
     )
     template = assertions.Template.from_stack(stack)
 
@@ -49,8 +47,6 @@ def test_backend_output_bucket_denies_insecure_transport():
         "Backend",
         env=ENV,
         vpc=vpc,
-        healthlake_datastore_id="fake-datastore-id",
-        domain_id="dom-fake",
     )
     template = assertions.Template.from_stack(stack)
 
@@ -95,8 +91,6 @@ def test_backend_alb_security_group_restricted_to_cloudfront_prefix_list():
         "Backend",
         env=ENV,
         vpc=vpc,
-        healthlake_datastore_id="fake-datastore-id",
-        domain_id="dom-fake",
     )
     template = assertions.Template.from_stack(stack)
 
@@ -126,8 +120,6 @@ def test_streaming_target_group_has_websocket_stickiness():
         env=ENV,
         vpc=vpc,
         output_bucket_uri="s3://fake-output-bucket",
-        domain_id="dom-fake",
-        subscription_id="sub-fake",
     )
     template = assertions.Template.from_stack(stack)
 
