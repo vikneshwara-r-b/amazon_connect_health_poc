@@ -40,6 +40,12 @@ class BackendStack(Stack):
         # too doubles it and breaks DNS resolution (see backend/config.py).
         service_endpoint: str = "https://health-agent.us-east-1.api.aws",
         cors_origin: str = "*",
+        # Feature flag: which provider POST /api/medical-codes uses -- "auto"
+        # (try GenerateMedicalCodes, fall back to Comprehend Medical + Bedrock),
+        # "connect-health" (GenerateMedicalCodes only, no fallback), or
+        # "comprehend-medical-bedrock" (skip GenerateMedicalCodes entirely). See
+        # backend/config.py and CLAUDE.md.
+        medical_codes_provider: str = "auto",
         user_pool: cognito.IUserPool | None = None,
         user_pool_client: cognito.IUserPoolClient | None = None,
         use_cloudfront: bool = True,
@@ -143,6 +149,20 @@ class BackendStack(Stack):
                 ],
             )
         )
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                # Fallback for medical coding when health-agent:GenerateMedicalCodes
+                # is unavailable (gated preview) -- see backend/server.py's
+                # _generate_medical_codes_fallback(). Comprehend Medical has no
+                # resource-level ARN scoping at all (confirmed: no resource type in
+                # its IAM reference), so these are necessarily account/region-wide.
+                actions=[
+                    "comprehendmedical:DetectEntitiesV2",
+                    "comprehendmedical:InferICD10CM",
+                ],
+                resources=["*"],
+            )
+        )
 
         alb_security_group = ec2.SecurityGroup(
             self,
@@ -237,6 +257,7 @@ class BackendStack(Stack):
                     if user_pool_client
                     else "",
                     "CORS_ORIGINS": cors_origin,
+                    "MEDICAL_CODES_PROVIDER": medical_codes_provider,
                 },
             ),
         )

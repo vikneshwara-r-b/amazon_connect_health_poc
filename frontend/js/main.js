@@ -5360,26 +5360,6 @@ function startProcessingWorkflowInOverlay() {
 
                     </div>
 
-                    
-
-                    <div class="processing-step" id="inlineStep4">
-
-                        <div class="step-icon">
-
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-
-                                <polyline points="16 18 22 12 16 6"/>
-
-                                <polyline points="8 6 2 12 8 18"/>
-
-                            </svg>
-
-                        </div>
-
-                        <span class="step-text">Generating medical codes</span>
-
-                    </div>
-
                 </div>
 
             </div>
@@ -5439,17 +5419,10 @@ async function startRealProcessingWithS3Polling() {
             markStepActive('inlineStep2');
         }, 1500);
         
-        setTimeout(() => {
+        setTimeout(async () => {
             markStepCompleted('inlineStep2');
             markStepActive('inlineStep3');
-        }, 3000);
-        
-        setTimeout(() => {
-            markStepCompleted('inlineStep3');
-            markStepActive('inlineStep4');
-        }, 4500);
-        
-        setTimeout(async () => {
+
             // Fetch cached data from backend (demo header is auto-injected by fetch interceptor)
             try {
                 const response = await fetch(`${backendUrl}/api/streaming/session/${sessionId}/outputs`);
@@ -5463,11 +5436,13 @@ async function startRealProcessingWithS3Polling() {
             } catch (e) {
                 console.warn('[Processing] DEMO — failed to fetch cached data:', e);
             }
-            
-            markStepCompleted('inlineStep4');
-            setTimeout(() => transitionToSoapNotes(), 500);
-        }, 5500);
-        
+
+            setTimeout(() => {
+                markStepCompleted('inlineStep3');
+                setTimeout(() => transitionToSoapNotes(), 500);
+            }, 1500);
+        }, 3000);
+
         return;
     }
     
@@ -5483,8 +5458,7 @@ async function startRealProcessingWithS3Polling() {
     
     let hasTranscript = false;
     let hasClinicalDoc = false;
-    let hasMedicalCodes = false;
-    
+
     async function pollS3() {
         const elapsed = Date.now() - startTime;
         
@@ -5517,40 +5491,24 @@ async function startRealProcessingWithS3Polling() {
                     }
                     markStepCompleted('inlineStep2');
                     markStepActive('inlineStep3');
-                    
-                    // Brief delay then complete step 3
-                    setTimeout(() => {
-                        markStepCompleted('inlineStep3');
-                        markStepActive('inlineStep4');
-                    }, 500);
-                    
+
                     // Store the clinical doc
                     processingS3Data = processingS3Data || {};
                     processingS3Data.clinicalDoc = outputs.clinicalDoc;
                     console.log('[Processing] Clinical doc ready');
-                }
-                
-                // Check medical codes (Step 4)
-                if (!hasMedicalCodes && outputs.medicalCodes && !outputs.medicalCodes.error) {
-                    hasMedicalCodes = true;
-                    markStepCompleted('inlineStep4');
-                    
-                    // Store the medical codes
-                    processingS3Data = processingS3Data || {};
-                    processingS3Data.medicalCodes = outputs.medicalCodes;
-                    console.log('[Processing] Medical codes ready');
-                    
-                    // All done! Transition to SOAP notes
+
+                    // Fetch ICD-10 codes now (backend sessionId mode) and wait
+                    // for them here, so the Clinical Documentation page opens
+                    // with codes already in hand instead of showing its own
+                    // separate loading state right after this one closes.
+                    await prefetchMedicalCodes(sessionId);
+
                     setTimeout(() => {
-                        transitionToSoapNotes();
+                        markStepCompleted('inlineStep3');
+                        setTimeout(() => {
+                            transitionToSoapNotes();
+                        }, 500);
                     }, 500);
-                    return;
-                }
-                
-                // If we have clinical doc but not codes yet, keep polling
-                if (hasClinicalDoc && !hasMedicalCodes) {
-                    // Continue polling for medical codes
-                    setTimeout(pollS3, POLL_INTERVAL);
                     return;
                 }
             }
@@ -5606,7 +5564,7 @@ function markStepCompleted(stepId) {
  * Complete any remaining steps quickly and transition
  */
 function completeRemainingSteps() {
-    const steps = ['inlineStep1', 'inlineStep2', 'inlineStep3', 'inlineStep4'];
+    const steps = ['inlineStep1', 'inlineStep2', 'inlineStep3'];
     let delay = 0;
     
     steps.forEach(stepId => {
@@ -5632,8 +5590,7 @@ function runSimulatedProcessingSteps() {
     const steps = [
         { id: 'inlineStep1', duration: 1000 },
         { id: 'inlineStep2', duration: 1250 },
-        { id: 'inlineStep3', duration: 1000 },
-        { id: 'inlineStep4', duration: 750 }
+        { id: 'inlineStep3', duration: 1000 }
     ];
 
     let currentStep = 0;
@@ -7318,6 +7275,17 @@ function editSoapNotes() {
 
 
 async function pollForMedicalCodes(sessionId, attempt = 0) {
+    // health-agent:GenerateMedicalCodes is never called server-side in this mode
+    // (backend/server.py skips it entirely -- see MEDICAL_CODES_PROVIDER), so
+    // medicalCodes.json will never be written to S3. Polling for it here would
+    // just be a guaranteed 90s wait before falling through anyway -- go straight
+    // to the direct-call fallback instead.
+    if (attempt === 0 && window.MEDICAL_CODES_PROVIDER === 'comprehend-medical-bedrock') {
+        console.log('[PollCodes] Provider is comprehend-medical-bedrock, skipping S3 poll');
+        generateAndDisplayMedicalCodes();
+        return;
+    }
+
     const MAX_ATTEMPTS = 30; // 30 x 3s = 90 seconds
     const DELAY = 3000;
     const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
@@ -7337,6 +7305,7 @@ async function pollForMedicalCodes(sessionId, attempt = 0) {
             sendCodesToIframe();
             linkEvidenceToSoapText(codes);
             setTimeout(initCodeTextHandlers, 200);
+            revealClinicalDocumentation();
             return;
         }
     } catch (e) {
@@ -7347,7 +7316,53 @@ async function pollForMedicalCodes(sessionId, attempt = 0) {
         console.log(`[PollCodes] Codes not ready, retry ${attempt + 1}/${MAX_ATTEMPTS}...`);
         setTimeout(() => pollForMedicalCodes(sessionId, attempt + 1), DELAY);
     } else {
-        console.log('[PollCodes] Gave up after max attempts');
+        // AWS's post-stream medical-coding pipeline never wrote medicalCodes.json
+        // for this session (expected while health-agent:GenerateMedicalCodes is
+        // gated -- see CLAUDE.md). This used to be a dead end: no fallback ran, and
+        // the sidebar was silently left on its empty/loading state forever, with
+        // no network call ever reaching POST /api/medical-codes. Fall through to
+        // the same direct-call path (with its own Comprehend Medical + Bedrock
+        // fallback) that the rest of the app already relies on for this.
+        console.log('[PollCodes] Gave up after max attempts, falling back to direct API call');
+        generateAndDisplayMedicalCodes();
+    }
+}
+
+
+async function pollForSoapNote(sessionId, attempt = 0) {
+    const MAX_ATTEMPTS = 30; // 30 x 3s = 90 seconds
+    const DELAY = 3000;
+    const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
+
+    try {
+        const resp = await fetch(`${backendUrl}/api/streaming/session/${sessionId}/outputs`);
+        const data = await resp.json();
+
+        if (data.success && data.outputs && data.outputs.clinicalDoc && !data.outputs.clinicalDoc.error) {
+            console.log(`[PollSoap] SOAP note ready on attempt ${attempt + 1}`);
+            if (!streamingSessionOutputs) streamingSessionOutputs = {};
+            streamingSessionOutputs.clinicalDoc = data.outputs.clinicalDoc;
+            if (data.outputs.medicalCodes && !data.outputs.medicalCodes.error) {
+                streamingSessionOutputs.medicalCodes = data.outputs.medicalCodes;
+            }
+            // Re-render now the SOAP note exists — this also kicks off medical-code
+            // polling/generation, which must not start any earlier.
+            injectSoapIntoRightPanel();
+            return;
+        }
+    } catch (e) {
+        console.log(`[PollSoap] Fetch error on attempt ${attempt + 1}:`, e.message); // nosemgrep: insecure-document-method, html-in-template-string, detect-non-literal-regexp, unsafe-formatstring
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+        console.log(`[PollSoap] SOAP note not ready, retry ${attempt + 1}/${MAX_ATTEMPTS}...`);
+        setTimeout(() => pollForSoapNote(sessionId, attempt + 1), DELAY);
+    } else {
+        console.log('[PollSoap] Gave up waiting for SOAP note after max attempts');
+        const soapMain = document.querySelector('.soap-notes-main');
+        if (soapMain) soapMain.innerHTML = '<p style="color:#9ca3af;padding:16px;">No clinical documentation available.</p>';
+        renderMedicalCodesSidebar([]);
+        sendCodesToIframe();
     }
 }
 
@@ -7366,8 +7381,9 @@ async function regenerateCodesFromEditedNotes() {
         codeListContainer.innerHTML = `
             <div class="code-section-header">ICD-10 Diagnosis Codes</div>
             <div class="codes-loading"><div class="codes-loading-spinner"></div><span>Re-analyzing clinical text...</span></div>
+            ${window.SHOW_CPT_CODES ? `
             <div class="code-section-header" style="margin-top:12px;">CPT Procedure Codes</div>
-            <div class="codes-loading"><div class="codes-loading-spinner"></div><span>Generating codes...</span></div>
+            <div class="codes-loading"><div class="codes-loading-spinner"></div><span>Generating codes...</span></div>` : ''}
         `;
     }
 
@@ -7465,6 +7481,28 @@ async function approveSoapNotes() {
 }
 
 
+// Covers the Clinical Documentation panel with the same "Generating clinical
+// documentation..." loading state used while waiting for the SOAP note itself,
+// so the note and its ICD-10 codes appear together instead of the note
+// flashing in immediately while the codes sidebar visibly catches up a few
+// seconds later. The real note stays rendered underneath (not replaced) so
+// extractSoapNoteText() can still read it while code generation runs.
+function showClinicalDocumentationOverlay() {
+    const body = document.querySelector('.soap-inline-body');
+    if (!body || body.querySelector('.soap-reveal-overlay')) return;
+    body.style.position = 'relative';
+    const overlay = document.createElement('div');
+    overlay.className = 'soap-reveal-overlay';
+    overlay.style.cssText = 'position:absolute;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:5;';
+    overlay.innerHTML = '<div class="soap-loading"><div class="soap-loading-spinner"></div><span>Generating clinical documentation...</span></div>';
+    body.appendChild(overlay);
+}
+
+function revealClinicalDocumentation() {
+    const overlay = document.querySelector('.soap-reveal-overlay');
+    if (overlay) overlay.remove();
+}
+
 function injectSoapIntoRightPanel() {
     const rightPanel = document.querySelector('.right-panel');
     if (!rightPanel) return;
@@ -7500,19 +7538,36 @@ function injectSoapIntoRightPanel() {
     // Use the existing displayClinicalDoc function (writes into .soap-notes-main)
     if (doc) {
         displayClinicalDoc(doc);
+    } else if (currentStreamingSessionId) {
+        // SOAP note not ready yet. Medical codes must not be generated until it
+        // exists -- the Comprehend Medical fallback reads the rendered SOAP text
+        // as its input -- so code polling is deferred to pollForSoapNote()'s
+        // success branch (which re-renders this panel once the note is ready).
+        const soapMain = document.querySelector('.soap-notes-main');
+        if (soapMain) soapMain.innerHTML = '<div class="soap-loading"><div class="soap-loading-spinner"></div><span>Generating clinical documentation...</span></div>';
+        const codeListContainer = document.querySelector('.code-list-sidebar');
+        if (codeListContainer) {
+            codeListContainer.innerHTML = '<div class="codes-loading"><div class="codes-loading-spinner"></div><span>Waiting for clinical notes...</span></div>';
+        }
+        sendCodesLoadingToIframe();
+        pollForSoapNote(currentStreamingSessionId);
+        return;
     } else {
         const soapMain = document.querySelector('.soap-notes-main');
         if (soapMain) soapMain.innerHTML = '<p style="color:#9ca3af;padding:16px;">No clinical documentation available.</p>';
     }
 
     // Display medical codes — if not available yet, poll for them
+    // (only reached once the SOAP note itself is confirmed present above)
     if (codes && codes.medicalCodes && codes.medicalCodes.length > 0) {
         displayMedicalCodesFromS3(codes);
         sendCodesToIframe();
         if (codes) linkEvidenceToSoapText(codes);
     } else if (currentStreamingSessionId) {
-        // Codes not ready — start polling
-        sendCodesToIframe(); // Show empty state immediately
+        // Codes not ready — hide the (already-rendered) note behind a shared
+        // loading overlay until codes catch up too, so both reveal together.
+        if (doc) showClinicalDocumentationOverlay();
+        sendCodesLoadingToIframe();
         pollForMedicalCodes(currentStreamingSessionId);
     } else {
         sendCodesToIframe(); // Show empty state
@@ -7526,6 +7581,15 @@ function linkEvidenceToSoapText(codesData) {
     const soapMain = document.querySelector('.soap-notes-main');
     if (!soapMain) return;
 
+    // Clear links from a previous generation (e.g. after Edit Notes -> Save
+    // Changes triggers regenerateCodesFromEditedNotes(), which re-links
+    // against this same DOM rather than a freshly rebuilt one) so this run
+    // isn't skipped -- below -- for paragraphs that still carry a stale span
+    // from the OLD codes list, pointing at a code no longer in the sidebar.
+    soapMain.querySelectorAll('.code-linked-text').forEach(span => {
+        span.replaceWith(document.createTextNode(span.textContent));
+    });
+
     const rawCodes = codesData.medicalCodes || codesData || [];
     const codeArray = Array.isArray(rawCodes) ? rawCodes : [];
     if (codeArray.length === 0) return;
@@ -7535,6 +7599,15 @@ function linkEvidenceToSoapText(codesData) {
     const seen = new Set();
     codeArray.forEach(code => {
         if (seen.has(code.name)) return;
+        // Don't link evidence for a code that isn't actually rendered anywhere
+        // (the CPT/E&M code when window.SHOW_CPT_CODES is false) -- otherwise
+        // its evidence text shows up as clickable/highlightable in the SOAP
+        // note with no matching .code-item-sidebar to activate, looking like
+        // broken ICD-10 linking when it's really just a hidden CPT code's
+        // evidence. Same system/regex check used when rendering the sidebar.
+        const sys = (code.system || '').toUpperCase();
+        const isCpt = sys === 'CPT' || (code.name && code.name.match(/^\d{5}$/));
+        if (isCpt && !window.SHOW_CPT_CODES) return;
         seen.add(code.name);
         if (code.evidence && Array.isArray(code.evidence)) {
             code.evidence.forEach(ev => {
@@ -7592,6 +7665,19 @@ function linkEvidenceToSoapText(codesData) {
     console.log('[Evidence] Linked', linkCount, 'evidence phrases to SOAP text from', evidenceLinks.length, 'candidates');
 }
 
+// Tells the previsit-iframe's Medical Codes panel to show its existing
+// "Re-analyzing clinical text..." loading state (previsit-iframe.html's
+// 'codes-loading' message handler) instead of a real (empty) codes payload.
+// Used at the two points where the frontend knows codes aren't ready yet, so
+// the ICD-10 Diagnosis Codes section shows a loader rather than a premature
+// "No diagnosis codes detected" via sendCodesToIframe()/showMedicalCodesPanel([]).
+function sendCodesLoadingToIframe() {
+    const iframe = document.getElementById('previsitIframe');
+    if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'codes-loading' }, window.location.origin);
+    }
+}
+
 function sendCodesToIframe() {
     const iframe = document.getElementById('previsitIframe');
     if (!iframe || !iframe.contentWindow) return;
@@ -7632,9 +7718,19 @@ function sendCodesToIframe() {
         console.log('[Codes] Sent empty codes to iframe');
     }
 
-    // Change iframe title to "Coding Insights"
+    // Change iframe title to "Coding Insights" -- and, the first time this
+    // happens, auto-minimize the panel so it opens closed by default (the
+    // clinician can restore it via the existing minimize/restore toggle).
+    // Guarded so a later codes update doesn't re-collapse a panel they've
+    // since reopened.
     const titleText = document.getElementById('previsitTitleText');
-    if (titleText) titleText.textContent = 'Coding Insights';
+    if (titleText && titleText.textContent !== 'Coding Insights') {
+        titleText.textContent = 'Coding Insights';
+        if (!window._codingInsightsAutoMinimized && typeof minimizeToCorner === 'function' && !isMinimized) {
+            window._codingInsightsAutoMinimized = true;
+            minimizeToCorner();
+        }
+    }
 }
 
 function initCodeTextHandlers() {
@@ -7649,27 +7745,20 @@ function initCodeTextHandlers() {
 }
 
 function toggleCodeTextHighlight(codeId) {
-    const allLinked = document.querySelectorAll('.code-linked-text');
-    const matching = document.querySelectorAll(`.code-linked-text[data-code="${codeId}"]`);
-    const wasHighlighted = matching.length > 0 && matching[0].classList.contains('highlighted');
-
-    // Clear all highlights
-    allLinked.forEach(el => el.classList.remove('highlighted'));
+    // Delegate to toggleCodeHighlight() -- the sidebar-click handler -- instead
+    // of reimplementing the toggle here. This used to only flip `.highlighted`
+    // on the clicked spans and message the previsit iframe, never touching
+    // `.code-item-sidebar`/`activeCodeHighlight`, so clicking linked text in the
+    // SOAP note could never highlight the corresponding sidebar code.
+    const wasActive = activeCodeHighlight === codeId;
+    toggleCodeHighlight(codeId);
 
     const iframe = document.getElementById('previsitIframe');
-
-    if (wasHighlighted) {
-        // Deselect — clear iframe highlights too
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({ type: 'clear-code-highlights' }, window.location.origin);
-        }
-    } else {
-        // Highlight matching text
-        matching.forEach(el => el.classList.add('highlighted'));
-        // Highlight code in iframe
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({ type: 'highlight-code', codeId: codeId }, window.location.origin);
-        }
+    if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(
+            wasActive ? { type: 'clear-code-highlights' } : { type: 'highlight-code', codeId: codeId },
+            window.location.origin
+        );
     }
 }
 
@@ -8935,28 +9024,31 @@ setInterval(refreshHeaderData, 30000);
 
 /**
  * Fetch medical codes from the backend API
- * @param {string} clinicalText - The SOAP note text to analyze
+ * @param {string|null} clinicalText - The SOAP note text to analyze (ignored when sessionId is given)
  * @param {object} patientContext - Optional patient context (dateOfBirth, sex, status)
  * @param {object} encounterContext - Optional encounter context (encounterType, encounterFormat)
- * @returns {Promise<Array>} Array of medical codes
+ * @param {string|null} sessionId - When given, the backend reads+flattens clinicalDoc.json
+ *   from S3 itself instead of using clinicalText -- see backend/server.py's
+ *   generate_medical_codes() sessionId mode.
+ * @returns {Promise<Array>} Array of medical codes. If the backend's own S3 read
+ *   hasn't found clinicalDoc.json yet, returns an empty array with a `.notReady`
+ *   flag set, distinguishing "not ready yet" from "genuinely no codes found".
  */
-async function fetchMedicalCodes(clinicalText, patientContext = null, encounterContext = null) {
+async function fetchMedicalCodes(clinicalText, patientContext = null, encounterContext = null, sessionId = null) {
     try {
-        const requestBody = {
-            text: clinicalText
-        };
-        
+        const requestBody = sessionId ? { sessionId } : { text: clinicalText };
+
         if (patientContext) {
             requestBody.patientContext = patientContext;
         }
-        
+
         if (encounterContext) {
             requestBody.encounterContext = encounterContext;
         }
-        
+
         const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
-        console.log('Calling /api/medical-codes with text length:', clinicalText.length);
-        
+        console.log('Calling /api/medical-codes with', sessionId ? `sessionId ${sessionId}` : `text length: ${clinicalText.length}`);
+
         const response = await fetch(`${backendUrl}/api/medical-codes`, {
             method: 'POST',
             headers: {
@@ -8964,14 +9056,21 @@ async function fetchMedicalCodes(clinicalText, patientContext = null, encounterC
             },
             body: JSON.stringify(requestBody)
         });
-        
+
         console.log('API response status:', response.status);
-        
+
+        if (response.status === 404) {
+            const errData = await response.json().catch(() => ({}));
+            const empty = [];
+            if (errData.error === 'clinical_doc_not_ready') empty.notReady = true;
+            return empty;
+        }
+
         if (!response.ok) {
             console.error('API request failed with status:', response.status);
             return [];
         }
-        
+
         const data = await response.json();
         console.log('API response data:', data);
         
@@ -8981,6 +9080,11 @@ async function fetchMedicalCodes(clinicalText, patientContext = null, encounterC
                 ...c,
                 confidence: c.confidence != null ? c.confidence : 0.90
             }));
+            // Set when health-agent:GenerateMedicalCodes wasn't available and the
+            // backend fell back to Comprehend Medical + Bedrock (see server.py's
+            // _generate_medical_codes_fallback) -- surfaced in the sidebar so it's
+            // not mistaken for AWS's native gated feature.
+            codes.fallback = data.fallback || null;
             console.log('Medical codes fetched:', codes);
             return codes;
         } else {
@@ -9027,21 +9131,32 @@ function renderMedicalCodesSidebar(codes) {
     // Clear existing codes
     codeListContainer.innerHTML = '';
 
+    // health-agent:GenerateMedicalCodes wasn't available and the backend fell back
+    // to Comprehend Medical + Bedrock (see server.py) -- disclose it, same as the
+    // "Rule-Based Summary" badge used elsewhere when a gated/AI feature falls back.
+    const fallbackBadgeHtml = (codes && codes.fallback) // nosemgrep: insecure-innerhtml — static literal, no user data
+        ? '<div class="code-fallback-badge" title="health-agent:GenerateMedicalCodes is unavailable on this account (gated preview) — these codes were derived from Amazon Comprehend Medical (ICD-10) and Bedrock (E&amp;M classification) instead, and have not been reviewed by a coder.">AI-Suggested — Needs Clinician Review</div>'
+        : '';
+
     if (!codes || codes.length === 0) {
         codeListContainer.innerHTML = `
+            ${fallbackBadgeHtml}
             <div class="code-section-header">ICD-10 Diagnosis Codes</div>
             <div class="no-codes-message">No codes detected</div>
+            ${window.SHOW_CPT_CODES ? `
             <div class="code-section-header" style="margin-top:12px;">CPT Procedure Codes</div>
-            <div class="no-codes-message">No codes detected</div>
+            <div class="no-codes-message">No codes detected</div>` : ''}
         `;
         return;
     }
+    codeListContainer.insertAdjacentHTML('beforeend', fallbackBadgeHtml); // nosemgrep: insecure-innerhtml — static literal built above, no user data
 
     // Separate ICD10 and CPT codes
     const icdCodes = codes.filter(c => {
         const sys = (c.system || '').toUpperCase();
         return sys === 'ICD10' || sys === 'ICD-10' || (c.name && c.name.match(/^[A-Z]\d/));
     });
+    icdCodes.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
     const cptCodes = codes.filter(c => {
         const sys = (c.system || '').toUpperCase();
         return sys === 'CPT' || (c.name && c.name.match(/^\d{5}$/));
@@ -9072,27 +9187,20 @@ function renderMedicalCodesSidebar(codes) {
         noIcd.textContent = 'No diagnosis codes detected';
         codeListContainer.appendChild(noIcd);
     } else {
-        const { primary, low } = splitByConfidence(icdCodes);
-        primary.forEach(code => codeListContainer.appendChild(createCodeElement(code, true)));
-        if (low.length > 0) {
-            const otherSection = document.createElement('div');
-            otherSection.className = 'other-predictions-section';
-            // nosemgrep: insecure-innerhtml — static toggle UI with count, no user data
-            const _html5 = `
-                <div class="other-predictions-toggle" onclick="this.parentElement.classList.toggle('expanded')">
-                    <span>Other predictions (${low.length})</span>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,4 6,8 10,4"/></svg>
-                </div>
-                <div class="other-predictions-list"></div>
-            `;
-            otherSection.innerHTML = _html5; // nosemgrep: insecure-innerhtml, insecure-document-method
-            const listEl = otherSection.querySelector('.other-predictions-list');
-            low.forEach(code => listEl.appendChild(createCodeElement(code, false)));
-            codeListContainer.appendChild(otherSection);
-        }
+        // Single flat list -- no separate collapsed "Other predictions" bucket for
+        // ICD-10 (the backend already drops anything below
+        // COMPREHEND_MEDICAL_ICD10_MIN_SCORE, so everything that reaches here is
+        // above the confidence bar and belongs in the one "ICD-10 Diagnosis Codes"
+        // section). CPT below keeps its own primary/low split unchanged.
+        icdCodes.forEach(code => codeListContainer.appendChild(createCodeElement(code, true, false)));
     }
 
-    // Render CPT section
+    // Render CPT section — gated behind window.SHOW_CPT_CODES (frontend/js/config.js).
+    // health-agent:GenerateMedicalCodes is a gated preview feature; without it, CPT
+    // only ever comes from a narrow Bedrock E&M-classification fallback, not real
+    // procedure coding. Left in place (not deleted) so it's a one-flag flip back on
+    // once gated access is granted -- see CLAUDE.md.
+    if (window.SHOW_CPT_CODES) {
     const cptHeader = document.createElement('div');
     cptHeader.className = 'code-section-header';
     cptHeader.style.marginTop = '12px';
@@ -9124,11 +9232,12 @@ function renderMedicalCodesSidebar(codes) {
             codeListContainer.appendChild(otherSection);
         }
     }
+    } // end window.SHOW_CPT_CODES
 
-    console.log(`Rendered ${icdCodes.length} ICD-10 + ${cptCodes.length} CPT codes`);
+    console.log(`Rendered ${icdCodes.length} ICD-10 + ${window.SHOW_CPT_CODES ? cptCodes.length : 0} CPT codes`);
 }
 
-function createCodeElement(code, selected) {
+function createCodeElement(code, selected, showConfidence = true) {
     const codeElement = document.createElement('div');
     codeElement.className = 'code-item-sidebar' + (selected ? ' selected' : '');
     codeElement.setAttribute('data-code', code.name);
@@ -9158,7 +9267,7 @@ function createCodeElement(code, selected) {
                 <span class="code-checkbox-custom"></span>
             </label>
             <div class="code-badge-sidebar">${escapeHtml(code.name)}</div>
-            <div class="code-confidence ${confClass}">${confidencePercent}%</div>
+            ${showConfidence ? `<div class="code-confidence ${confClass}">${confidencePercent}%</div>` : ''}
         </div>
         <div class="code-description-sidebar">${escapeHtml(desc)}</div>
     `;
@@ -9189,13 +9298,51 @@ function toggleCodeSelection(checkbox, codeName) {
  * Generate medical codes from current SOAP notes and update sidebar
  * Called when SOAP notes are displayed or updated
  */
-async function generateAndDisplayMedicalCodes() {
+// DOM-free variant of generateAndDisplayMedicalCodes(), used during the
+// "Generating Clinical Notes" processing overlay (before the Clinical
+// Documentation page -- and its .code-list-sidebar/.soap-notes-main elements
+// -- exist). Fetches codes via the same backend sessionId mode and stores the
+// result for the SOAP-notes page to pick up, so it renders with codes already
+// in hand instead of showing its own separate loading state afterward.
+async function prefetchMedicalCodes(sessionId, attempt = 0) {
+    const patientContext = getCurrentPatientContext();
+    const codes = await fetchMedicalCodes(null, patientContext, {
+        encounterFormat: 'IN_PERSON'
+    }, sessionId);
+
+    if (codes && codes.notReady) {
+        const MAX_ATTEMPTS = 5;
+        if (attempt < MAX_ATTEMPTS) {
+            console.log(`[PrefetchCodes] clinical_doc_not_ready, retry ${attempt + 1}/${MAX_ATTEMPTS}...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return prefetchMedicalCodes(sessionId, attempt + 1);
+        }
+        console.warn('[PrefetchCodes] Gave up waiting for clinicalDoc.json to appear');
+        return null;
+    }
+
+    if (codes && codes.length > 0) {
+        processingS3Data = processingS3Data || {};
+        processingS3Data.medicalCodes = { medicalCodes: codes };
+        // Prevents generateAndDisplayMedicalCodes() from re-fetching if it's
+        // ever still reached (e.g. this prefetch came back empty/failed).
+        window.medicalCodesLoadedFromS3 = true;
+        console.log('[PrefetchCodes] Codes ready:', codes.length);
+        return codes;
+    }
+
+    console.log('[PrefetchCodes] No codes returned');
+    return null;
+}
+
+async function generateAndDisplayMedicalCodes(attempt = 0) {
     // Skip if codes were already loaded from S3
     if (window.medicalCodesLoadedFromS3) {
         console.log('[MedicalCodes] Skipping - codes already loaded from S3');
+        revealClinicalDocumentation();
         return;
     }
-    
+
     // Show loading state
     const codeListContainer = document.querySelector('.code-list-sidebar');
     if (codeListContainer) {
@@ -9206,42 +9353,86 @@ async function generateAndDisplayMedicalCodes() {
             </div>
         `;
     }
-    
-    // Extract SOAP note text
-    const clinicalText = extractSoapNoteText();
-    
-    if (!clinicalText) {
-        console.warn('No SOAP note text found');
-        renderMedicalCodesSidebar([]);
-        return;
+
+    // Prefer having the backend read+flatten clinicalDoc.json from S3 itself
+    // (sessionId mode) over scraping the rendered SOAP note back out of the
+    // DOM -- generation shouldn't depend on UI render state, only on whether
+    // the note actually exists yet. Only fall back to DOM extraction when no
+    // session id is available at all (shouldn't normally happen here, since
+    // this is only reached once pollForSoapNote() has confirmed the note
+    // exists, but kept as a safety net).
+    const sessionId = currentStreamingSessionId || null;
+    let clinicalText = null;
+    if (!sessionId) {
+        clinicalText = extractSoapNoteText();
+        if (!clinicalText) {
+            console.warn('No SOAP note text found');
+            renderMedicalCodesSidebar([]);
+            revealClinicalDocumentation();
+            return;
+        }
+        console.log('Extracted SOAP text length:', clinicalText.length);
+        console.log('SOAP text preview:', clinicalText.substring(0, 200) + '...');
     }
-    
-    console.log('Extracted SOAP text length:', clinicalText.length);
-    console.log('SOAP text preview:', clinicalText.substring(0, 200) + '...');
-    
+
     // Get current patient context if available
     const patientContext = getCurrentPatientContext();
     console.log('Patient context:', patientContext);
-    
+
     // Fetch codes from API
     const codes = await fetchMedicalCodes(clinicalText, patientContext, {
         encounterFormat: 'IN_PERSON'
-    });
-    
+    }, sessionId);
+
+    if (codes && codes.notReady) {
+        // clinicalDoc.json wasn't in S3 yet on the backend's own read -- a
+        // narrow race even after pollForSoapNote() confirmed it via /outputs,
+        // since that's a separate read. Retry briefly rather than treating
+        // this the same as "genuinely no codes found".
+        const MAX_ATTEMPTS = 5;
+        if (attempt < MAX_ATTEMPTS) {
+            console.log(`[MedicalCodes] clinical_doc_not_ready, retry ${attempt + 1}/${MAX_ATTEMPTS}...`);
+            setTimeout(() => generateAndDisplayMedicalCodes(attempt + 1), 2000);
+            return;
+        }
+        console.warn('[MedicalCodes] Gave up waiting for clinicalDoc.json to appear');
+        renderMedicalCodesSidebar([]);
+        sendCodesToIframe();
+        revealClinicalDocumentation();
+        return;
+    }
+
     console.log('API returned codes:', codes);
-    
+
     // If API returned empty or failed, show the hardcoded codes as fallback
     if (!codes || codes.length === 0) {
         console.log('No codes from API');
         renderMedicalCodesSidebar([]);
+        sendCodesToIframe();
+        revealClinicalDocumentation();
         return;
     }
-    
+
     // Render codes in sidebar
     renderMedicalCodesSidebar(codes);
-    
-    // Optionally link codes to text spans
-    linkCodesToText(codes);
+
+    // Keep the previsit-iframe's "Coding Insights" panel in sync -- without this
+    // it stays on whatever it was last sent (usually the empty-state placeholder
+    // sent right before this ran) even though .code-list-sidebar here updates
+    // correctly, since these are two independently-rendered surfaces.
+    if (streamingSessionOutputs) {
+        streamingSessionOutputs.medicalCodes = { medicalCodes: codes };
+    }
+    sendCodesToIframe();
+
+    // Insert <span class="code-linked-text" data-code="..."> around each code's
+    // evidence phrase in the SOAP note and wire up the click-to-highlight
+    // handlers -- linkCodesToText() below is a dead stub (just console.logs,
+    // never touches the DOM) and was leaving codes generated via this path
+    // with no working link to their source text.
+    linkEvidenceToSoapText({ medicalCodes: codes });
+    setTimeout(initCodeTextHandlers, 200);
+    revealClinicalDocumentation();
 }
 
 /**

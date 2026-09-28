@@ -24,7 +24,9 @@ from config import (
     SMS_AWS_PROFILE, SMS_REGION, SMS_ORIGINATION_NUMBER,
     DEMO_CACHE, CORS_ORIGINS,
     SERVER_HOST, SERVER_PORT, DEBUG,
-    BEDROCK_MODEL_ID, BEDROCK_REGION, BEDROCK_MAX_TOKENS
+    BEDROCK_MODEL_ID, BEDROCK_REGION, BEDROCK_MAX_TOKENS,
+    COMPREHEND_MEDICAL_REGION, COMPREHEND_MEDICAL_MIN_SCORE, COMPREHEND_MEDICAL_ICD10_MIN_SCORE,
+    MEDICAL_CODES_PROVIDER
 )
 from demo_mode import is_demo_request, get_cached_response, save_to_cache, DEMO_RECORD
 from auth import init_auth
@@ -264,6 +266,190 @@ def echo():
 
 
 # =============================================================================
+# MEDICAL CODING FALLBACK — Comprehend Medical (ICD-10) + Bedrock (CPT/E&M)
+# =============================================================================
+# health-agent:GenerateMedicalCodes is a gated preview feature (see CLAUDE.md)
+# and errors out on accounts without access. This fallback derives codes a
+# different way: Comprehend Medical's InferICD10CM gives grounded, non-generative
+# ICD-10-CM codes (ontology lookup against the real CDC code set, so it can't
+# hallucinate a nonexistent code); Bedrock is used only for the one thing nothing
+# else on AWS does here — reasoning about which E&M code the visit's complexity
+# implies — and only as a classification over a short, fixed set of outpatient
+# codes, not open generation, for the same no-hallucination reason. Pattern
+# (confidence-score filtering, structured-entity grounding, XML prompt, required
+# evidence citation) follows AWS's own guidance:
+# https://docs.aws.amazon.com/prescriptive-guidance/latest/generative-ai-nlp-healthcare/comprehend-medical-rag.html
+#
+# CPT itself is AMA-copyrighted content -- this deliberately only ever proposes
+# E&M-level codes from a small hardcoded table below, not arbitrary CPT codes,
+# so it doesn't need a licensed CPT code database to stay accurate.
+
+# Outpatient E&M levels relevant to this app's established-patient follow-up-visit
+# scope (2021 AMA guidelines, medical-decision-making basis). Kept short and fixed
+# so Bedrock classifies into a known set instead of generating an arbitrary code.
+_EM_CODE_TABLE = """99213 | Established patient office visit, low complexity (straightforward problem, minimal data review, low risk)
+99214 | Established patient office visit, moderate complexity (2+ stable chronic problems or 1 worsening problem, moderate data review, moderate risk e.g. prescription drug management)
+99215 | Established patient office visit, high complexity (severe exacerbation or threat to life/function, extensive data review, high risk)"""
+
+
+def _infer_icd10_codes_with_comprehend_medical(text, session):
+    """Ontology-linked ICD-10-CM codes for entities detected in the clinical
+    text -- deterministic lookup against the CDC ICD-10-CM knowledge base, not
+    an LLM, so no hallucination risk. One candidate (the top-scored concept) per
+    detected entity, filtered to COMPREHEND_MEDICAL_ICD10_MIN_SCORE (stricter than
+    the general COMPREHEND_MEDICAL_MIN_SCORE used for CPT/E&M grounding below --
+    low-confidence ICD-10 is dropped entirely rather than shown to a clinician)."""
+    client = session.client('comprehendmedical', region_name=COMPREHEND_MEDICAL_REGION)
+    response = client.infer_icd10_cm(Text=text)
+    # Keyed by code: the same term (e.g. "cough") often appears as a separate
+    # entity per mention in the text, each independently top-matching the same
+    # ICD-10-CM code -- collapse those into one entry (highest-confidence
+    # instance) rather than showing the same code repeated in the UI.
+    by_code = {}
+    for entity in response.get('Entities', []):
+        if entity.get('Score', 0) < COMPREHEND_MEDICAL_ICD10_MIN_SCORE:
+            continue
+        concepts = [c for c in entity.get('ICD10CMConcepts', []) if c.get('Score', 0) >= COMPREHEND_MEDICAL_ICD10_MIN_SCORE]
+        if not concepts:
+            continue
+        top = max(concepts, key=lambda c: c.get('Score', 0))
+        existing = by_code.get(top['Code'])
+        if existing and existing['confidence'] >= round(top['Score'], 4):
+            continue
+        by_code[top['Code']] = {
+            "name": top['Code'],
+            "system": "ICD10",
+            "description": top['Description'],
+            "confidence": round(top['Score'], 4),
+            "evidence": [{"text": entity.get('Text', '')}],
+        }
+    return list(by_code.values())
+
+
+def _detect_structured_entities_with_comprehend_medical(text, session):
+    """MEDICAL_CONDITION/TEST_TREATMENT_PROCEDURE/ANATOMY entities, filtered by
+    score -- this is the grounding context handed to Bedrock for CPT/E&M
+    reasoning below. Prompting the LLM with these structured entities instead of
+    raw free text is the core hallucination-mitigation technique from AWS's
+    Comprehend-Medical-with-LLMs guidance (see module comment above)."""
+    client = session.client('comprehendmedical', region_name=COMPREHEND_MEDICAL_REGION)
+    response = client.detect_entities_v2(Text=text)
+    entities = []
+    for entity in response.get('Entities', []):
+        if entity.get('Score', 0) < COMPREHEND_MEDICAL_MIN_SCORE:
+            continue
+        if entity.get('Category') not in ("MEDICAL_CONDITION", "TEST_TREATMENT_PROCEDURE", "ANATOMY"):
+            continue
+        entities.append({
+            "text": entity.get('Text', ''),
+            "category": entity.get('Category'),
+            "type": entity.get('Type'),
+        })
+    return entities
+
+
+def _infer_em_code_with_bedrock(text, entities, icd10_codes, session):
+    """Classify the visit into one of _EM_CODE_TABLE's fixed E&M codes, grounded
+    in Comprehend Medical's structured entities rather than raw text. Requires a
+    verbatim citation from the note so a reviewer can check the answer against
+    the source -- same evidence-citation discipline this app's other Bedrock
+    prompts already use, and AWS's own recommended response format."""
+    entities_xml = "\n".join(
+        f"<entity><text>{e['text']}</text><category>{e['category']}</category><type>{e['type']}</type></entity>"
+        for e in entities
+    ) or "<entity><text>none detected</text></entity>"
+    icd10_xml = "\n".join(
+        f"<code><value>{c['name']}</value><description>{c['description']}</description></code>"
+        for c in icd10_codes
+    ) or "<code><value>none</value></code>"
+
+    prompt = f"""<medical_text>
+{text}
+</medical_text>
+
+<comprehend_medical_entities>
+{entities_xml}
+</comprehend_medical_entities>
+
+<icd10_codes>
+{icd10_xml}
+</icd10_codes>
+
+<em_code_options>
+{_EM_CODE_TABLE}
+</em_code_options>
+
+<prompt_instructions>
+This is an outpatient, established-patient follow-up visit. Using ONLY the
+entities, ICD-10 codes, and medical text above, choose exactly one Evaluation
+&amp; Management (E&amp;M) code from em_code_options that best matches this
+visit's complexity under the 2021 AMA E/M guidelines (medical decision making
+complexity, not time). Do not propose a code outside that list. Respond with
+only this XML, no other text:
+<response>
+<cpt>
+<code>the 5-digit code</code>
+<confidence>a number from 0 to 1</confidence>
+<evidence>a short exact quote from medical_text that justifies this level</evidence>
+</cpt>
+</response>
+</prompt_instructions>"""
+
+    bedrock = session.client('bedrock-runtime', region_name=BEDROCK_REGION)
+    body = json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 400,
+        "messages": [{"role": "user", "content": prompt}]
+    })
+    response = bedrock.invoke_model(
+        modelId=BEDROCK_MODEL_ID,
+        contentType='application/json',
+        accept='application/json',
+        body=body,
+    )
+    result = json.loads(response['body'].read())
+    raw_text = result.get('content', [{}])[0].get('text', '')
+
+    import re
+    code_match = re.search(r'<code>\s*(\d{5})\s*</code>', raw_text)
+    if not code_match or code_match.group(1) not in _EM_CODE_TABLE:
+        return []  # model didn't return one of the offered codes -- don't guess
+    confidence_match = re.search(r'<confidence>\s*([\d.]+)\s*</confidence>', raw_text)
+    evidence_match = re.search(r'<evidence>(.*?)</evidence>', raw_text, re.DOTALL)
+    description = next(
+        (line.split('|', 1)[1].strip() for line in _EM_CODE_TABLE.splitlines() if line.startswith(code_match.group(1))),
+        "Evaluation & Management",
+    )
+    return [{
+        "name": code_match.group(1),
+        "system": "CPT",
+        "description": description,
+        "confidence": round(float(confidence_match.group(1)), 4) if confidence_match else 0.5,
+        "evidence": [{"text": evidence_match.group(1).strip()}] if evidence_match else [],
+    }]
+
+
+def _generate_medical_codes_fallback(text):
+    """Comprehend Medical (ICD-10) + Bedrock (E&M) -- used when
+    health-agent:GenerateMedicalCodes isn't available. Returns the same
+    {name, system, description, confidence, evidence} shape GenerateMedicalCodes
+    returns, so callers don't need to know which path produced the codes."""
+    if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
+        session = boto3.Session(profile_name=AWS_PROFILE)
+    else:
+        session = boto3.Session()
+
+    icd10_codes = _infer_icd10_codes_with_comprehend_medical(text, session)
+    entities = _detect_structured_entities_with_comprehend_medical(text, session)
+    try:
+        em_codes = _infer_em_code_with_bedrock(text, entities, icd10_codes, session)
+    except Exception as e:
+        print(f"[MedicalCodes] Bedrock E&M step failed, continuing with ICD-10 only: {e}")
+        em_codes = []
+    return icd10_codes + em_codes
+
+
+# =============================================================================
 # GENERATE MEDICAL CODES API
 # =============================================================================
 
@@ -272,9 +458,13 @@ def generate_medical_codes():
     """
     Generate ICD10/CPT codes from clinical text.
     
-    Request body:
+    Request body -- either 'text' (used verbatim, e.g. clinician-edited notes)
+    or 'sessionId' (backend reads clinicalDoc.json from S3 and flattens it
+    itself, so the caller doesn't need to have already fetched/rendered the
+    note first):
     {
-        "text": "Clinical encounter text...",
+        "text": "Clinical encounter text...",       // OR:
+        "sessionId": "<streaming session id>",
         "patientContext": {
             "dateOfBirth": "1965-03-15T00:00:00Z",
             "sex": "MALE" | "FEMALE",
@@ -288,9 +478,9 @@ def generate_medical_codes():
     """
     try:
         data = request.get_json()
-        
-        if not data or 'text' not in data:
-            return jsonify({"success": False, "error": "Missing 'text' field"}), 400
+
+        if not data or ('text' not in data and 'sessionId' not in data):
+            return jsonify({"success": False, "error": "Missing 'text' or 'sessionId' field"}), 400
 
         # Demo mode: return cached medical codes from streaming outputs
         if is_demo_request():
@@ -298,14 +488,39 @@ def generate_medical_codes():
             if cached and cached.get('outputs', {}).get('medicalCodes'):
                 return jsonify({"success": True, "medicalCodes": cached['outputs']['medicalCodes'].get('medicalCodes', [])})
 
+        if 'text' in data:
+            text = data['text']
+        else:
+            # sessionId mode: read clinicalDoc.json from S3 directly instead of
+            # requiring the frontend to have fetched+rendered it into the DOM
+            # first and scraped it back out -- removes a round trip and a
+            # dependency on UI render state that has nothing to do with
+            # whether the note actually exists yet.
+            clinical_doc = _fetch_clinical_doc_from_s3(data['sessionId'])
+            text = _flatten_clinical_doc_text(clinical_doc) if clinical_doc else ''
+            if not text:
+                return jsonify({"success": False, "error": "clinical_doc_not_ready"}), 404
+
+        # MEDICAL_CODES_PROVIDER feature flag (see config.py): "comprehend-medical-bedrock"
+        # skips GenerateMedicalCodes entirely -- no point calling an API already known
+        # to be unavailable, and useful for iterating on the fallback prompt in isolation.
+        if MEDICAL_CODES_PROVIDER == "comprehend-medical-bedrock":
+            print("[MedicalCodes] MEDICAL_CODES_PROVIDER=comprehend-medical-bedrock, skipping GenerateMedicalCodes")
+            codes = _generate_medical_codes_fallback(text)
+            return jsonify({
+                "success": True,
+                "medicalCodes": codes,
+                "fallback": "comprehend-medical-bedrock",
+            })
+
         client = get_client()
-        
+
         # Build request — domainId required for HealthAgent GA
         request_params = {
             "domainId": DOMAIN_ID,
-            "text": data['text']
+            "text": text
         }
-        
+
         if 'patientContext' in data:
             pc = data['patientContext']
             # Remove dateOfBirth — the service model serializes it as a full ISO timestamp
@@ -313,21 +528,46 @@ def generate_medical_codes():
             pc.pop('dateOfBirth', None)
             if pc:  # only include if there are remaining fields
                 request_params['patientContext'] = pc
-        
+
         if 'encounterContext' in data:
             request_params['encounterContext'] = data['encounterContext']
-        
+
         # Call API
         print(f"[DEBUG] GenerateMedicalCodes request_params keys: {list(request_params.keys())}")
         if 'patientContext' in request_params:
             print(f"[DEBUG] patientContext: {request_params['patientContext']}")
-        response = client.generate_medical_codes(**request_params)
-        
-        return jsonify({
-            "success": True,
-            "medicalCodes": response.get('medicalCodes', [])
-        })
-        
+
+        # MEDICAL_CODES_PROVIDER=connect-health: no fallback -- surface the real
+        # error so gated-access status is visible instead of masked.
+        if MEDICAL_CODES_PROVIDER == "connect-health":
+            response = client.generate_medical_codes(**request_params)
+            return jsonify({
+                "success": True,
+                "medicalCodes": response.get('medicalCodes', [])
+            })
+
+        # Default ("auto"): try GenerateMedicalCodes, fall back on any failure.
+        try:
+            response = client.generate_medical_codes(**request_params)
+            return jsonify({
+                "success": True,
+                "medicalCodes": response.get('medicalCodes', [])
+            })
+        except Exception as e:
+            # health-agent:GenerateMedicalCodes is a gated preview feature (see
+            # CLAUDE.md) -- most accounts hit AccessDenied/ValidationException
+            # here. Fall back to Comprehend Medical + Bedrock rather than
+            # surfacing an error, same "labeled fallback" pattern this app
+            # already uses for the previsit narrative when Bedrock/gated
+            # features aren't available.
+            print(f"[MedicalCodes] GenerateMedicalCodes unavailable ({e}), falling back to Comprehend Medical + Bedrock")
+            codes = _generate_medical_codes_fallback(text)
+            return jsonify({
+                "success": True,
+                "medicalCodes": codes,
+                "fallback": "comprehend-medical-bedrock",
+            })
+
     except Exception as e:
         return _safe_error(e, "generate_medical_codes")
 
@@ -1080,6 +1320,49 @@ def _find_clinical_notes_prefix(s3, session_id):
         print(f"[S3] Error discovering prefix for {session_id}: {e}")
     return None
 
+
+def _fetch_clinical_doc_from_s3(session_id):
+    """Direct S3 read of clinicalDoc.json for a session -- same lookup GET
+    /outputs uses, factored out so /api/medical-codes's sessionId mode doesn't
+    need the frontend to have already fetched+rendered the note first. Returns
+    the parsed dict, or None if the note isn't written yet (not an error --
+    AWS's post-stream pipeline may still be running)."""
+    if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
+        session = boto3.Session(profile_name=AWS_PROFILE)
+    else:
+        session = boto3.Session()
+    s3 = session.client('s3', region_name=STREAMING_OUTPUT_REGION)
+
+    base_prefix = _find_clinical_notes_prefix(s3, session_id)
+    if not base_prefix:
+        return None
+    try:
+        response = s3.get_object(Bucket=STREAMING_OUTPUT_BUCKET, Key=base_prefix + 'clinicalDoc.json')
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except s3.exceptions.NoSuchKey:
+        return None
+
+
+def _flatten_clinical_doc_text(clinical_doc):
+    """Plain-text clinical content from a clinicalDoc.json dict, for feeding to
+    Comprehend Medical/Bedrock. Unlike frontend/js/main.js's displayClinicalDoc()
+    (which buckets sections into Subjective/Objective/Assessment/Plan headings
+    purely for on-screen layout), entity detection doesn't care about that
+    organization -- this just concatenates every section's text in document
+    order. Returns '' for an unrecognized/empty shape; callers treat that the
+    same as "no text to generate codes from"."""
+    if not clinical_doc:
+        return ''
+    sections = (clinical_doc.get('ClinicalDocumentation') or {}).get('Sections') or []
+    parts = []
+    for section in sections:
+        for seg in section.get('Summary') or []:
+            text = seg.get('SummarizedSegment')
+            if text:
+                parts.append(text)
+    return '\n\n'.join(parts)
+
+
 @app.route('/api/streaming/session/<session_id>/outputs', methods=['GET'])
 def get_streaming_session_outputs(session_id):
     """
@@ -1230,16 +1513,27 @@ def get_streaming_medical_codes(session_id):
             s3_key = post_stream_prefix + "medical-codes/medicalCodes.json"
             response = s3.get_object(Bucket=STREAMING_OUTPUT_BUCKET, Key=s3_key)
         except s3.exceptions.NoSuchKey:
-            s3_key = base_prefix + "medicalCodes.json"
-            response = s3.get_object(Bucket=STREAMING_OUTPUT_BUCKET, Key=s3_key)
+            try:
+                s3_key = base_prefix + "medicalCodes.json"
+                response = s3.get_object(Bucket=STREAMING_OUTPUT_BUCKET, Key=s3_key)
+            except s3.exceptions.NoSuchKey:
+                # Neither location has it: AWS's post-stream medical-coding pipeline
+                # never wrote one for this session (expected while
+                # health-agent:GenerateMedicalCodes is a gated preview feature --
+                # see CLAUDE.md), not a server error. The frontend's polling loop
+                # (fetchMedicalCodesOnly in main.js) already treats a non-success
+                # response as "not ready yet" and retries, then falls back to
+                # POST /api/medical-codes -- this only fixes the status code and
+                # stops flooding the logs with tracebacks for an expected case.
+                return jsonify({"success": False, "error": "Medical codes were not generated for this session"}), 404
         content = response['Body'].read().decode('utf-8')
-        
+
         return jsonify({
             "success": True,
             "sessionId": session_id,
             "medicalCodes": json.loads(content)
         })
-        
+
     except Exception as e:
         return _safe_error(e, "get_streaming_medical_codes")
 

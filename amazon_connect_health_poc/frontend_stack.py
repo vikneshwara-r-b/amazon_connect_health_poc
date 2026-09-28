@@ -21,6 +21,10 @@ WSS_PLACEHOLDER = "wss://<YOUR_WSS_CLOUDFRONT>.cloudfront.net/stream"
 BACKEND_PLACEHOLDER = "https://<YOUR_BACKEND_CLOUDFRONT>.cloudfront.net"
 USER_POOL_ID_PLACEHOLDER = "'YOUR_COGNITO_USER_POOL_ID'"
 CLIENT_ID_PLACEHOLDER = "'YOUR_COGNITO_CLIENT_ID'"
+# Whole-statement token (not a bare "true") so replacement can't collide with an
+# unrelated "true" elsewhere in the file.
+SHOW_CPT_CODES_PLACEHOLDER = "window.SHOW_CPT_CODES = true;"
+MEDICAL_CODES_PROVIDER_PLACEHOLDER = "window.MEDICAL_CODES_PROVIDER = 'auto';"
 
 
 def _render_config_js(
@@ -29,6 +33,8 @@ def _render_config_js(
     websocket_url: str,
     user_pool_id: str | None,
     user_pool_client_id: str | None,
+    show_cpt_codes: bool = True,
+    medical_codes_provider: str = "auto",
 ) -> str:
     """Bake the deploy-time backend/WSS URLs (and optional Cognito IDs) into
     config.js, matching what DEPLOYMENT_GUIDE.md Step 3b does by hand.
@@ -47,6 +53,8 @@ def _render_config_js(
         CLIENT_ID_PLACEHOLDER: f"'{user_pool_client_id}'"
         if user_pool_client_id
         else CLIENT_ID_PLACEHOLDER,
+        SHOW_CPT_CODES_PLACEHOLDER: f"window.SHOW_CPT_CODES = {str(show_cpt_codes).lower()};",
+        MEDICAL_CODES_PROVIDER_PLACEHOLDER: f"window.MEDICAL_CODES_PROVIDER = '{medical_codes_provider}';",
     }
     for placeholder, value in replacements.items():
         if placeholder not in content:
@@ -88,6 +96,8 @@ class FrontendStack(Stack):
         user_pool_id: str | None = None,
         user_pool_client_id: str | None = None,
         use_cloudfront: bool = True,
+        show_cpt_codes: bool = True,
+        medical_codes_provider: str = "auto",
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -165,6 +175,8 @@ class FrontendStack(Stack):
             websocket_url=websocket_url,
             user_pool_id=user_pool_id,
             user_pool_client_id=user_pool_client_id,
+            show_cpt_codes=show_cpt_codes,
+            medical_codes_provider=medical_codes_provider,
         )
 
         s3_deployment.BucketDeployment(

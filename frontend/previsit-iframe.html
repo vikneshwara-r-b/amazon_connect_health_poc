@@ -1130,8 +1130,9 @@
                     <div style="padding:10px 14px;">
                         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;padding:6px 0 4px;border-bottom:1px solid #f1f5f9;">ICD-10 Diagnosis Codes</div>
                         <div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No diagnosis codes detected</div>
+                        ${window.SHOW_CPT_CODES ? `
                         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;padding:10px 0 4px;margin-top:8px;border-bottom:1px solid #f1f5f9;">CPT Procedure Codes</div>
-                        <div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No procedure codes detected</div>
+                        <div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No procedure codes detected</div>` : ''}
                     </div>`;
                 panel.style.display = 'block';
                 return;
@@ -1168,18 +1169,8 @@
             const colors = { ICD10: '#8b5cf6', CPT: '#10b981' };
             let html = '<div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span style="font-size:14px;font-weight:600;color:#1e293b;">Medical Codes</span></div>';
             html += '<div style="padding:10px 14px;">';
-            
-            // Split into primary (>=60%) and low confidence (<60%)
-            const primaryCodes = codes.filter(c => {
-                const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence) / 100;
-                return conf >= 0.60;
-            });
-            const lowConfCodes = codes.filter(c => {
-                const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence) / 100;
-                return conf < 0.60;
-            });
 
-            function renderCodeItem(code, checked) {
+            function renderCodeItem(code, checked, showConfidence = true) {
                 const color = colors[code.system] || '#6366f1';
                 const confidenceRaw = typeof code.confidence === 'number' ? code.confidence : parseFloat(code.confidence) / 100;
                 const confidence = Math.round(confidenceRaw * 100);
@@ -1196,13 +1187,14 @@
                     <span style="display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;color:white;background:${color};white-space:nowrap;flex-shrink:0;margin-top:2px;" onclick="onCodeClicked('${code.name}')">${code.name}</span>
                     <div style="flex:1;" onclick="onCodeClicked('${code.name}')">
                         <div style="font-size:13px;color:#374151;line-height:1.4;">${code.description || ''}</div>
-                        ${confidence ? `<div style="font-size:11px;color:${confColor};font-weight:600;margin-top:2px;">${confidence}%</div>` : ''}
+                        ${(showConfidence && confidence) ? `<div style="font-size:11px;color:${confColor};font-weight:600;margin-top:2px;">${confidence}%</div>` : ''}
                     </div>
                 </div>`; 
             }
 
             // Separate ICD10 and CPT
             const icdCodes = codes.filter(c => { const s = (c.system||'').toUpperCase(); return s === 'ICD10' || s === 'ICD-10' || (c.name && c.name.match(/^[A-Z]\d/)); });
+            icdCodes.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
             const cptCodes = codes.filter(c => { const s = (c.system||'').toUpperCase(); return s === 'CPT' || (c.name && c.name.match(/^\d{5}$/)); });
 
             // ICD-10 section
@@ -1210,17 +1202,19 @@
             if (icdCodes.length === 0) {
                 html += '<div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No diagnosis codes detected</div>';
             } else {
-                const icdPrimary = icdCodes.filter(c => { const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence)/100; return conf >= 0.60; });
-                const icdLow = icdCodes.filter(c => { const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence)/100; return conf < 0.60; });
-                icdPrimary.forEach(code => { html += renderCodeItem(code, true); });
-                if (icdLow.length > 0) {
-                    html += `<div style="margin-top:6px;"><div onclick="var l=this.nextElementSibling;l.style.display=l.style.display==='none'?'block':'none';" style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;cursor:pointer;border-radius:6px;background:#f8fafc;font-size:12px;font-weight:600;color:#64748b;"><span>Other ICD-10 (${icdLow.length})</span><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,4 6,8 10,4"/></svg></div><div style="display:none;">`;
-                    icdLow.forEach(code => { html += renderCodeItem(code, false); });
-                    html += '</div></div>';
-                }
+                // Single flat list -- no separate collapsed "Other ICD-10" bucket.
+                // The backend already drops anything below
+                // COMPREHEND_MEDICAL_ICD10_MIN_SCORE (see backend/config.py), so
+                // everything that reaches here belongs in the one section.
+                icdCodes.forEach(code => { html += renderCodeItem(code, true, false); });
             }
 
-            // CPT section
+            // CPT section — gated behind window.SHOW_CPT_CODES (frontend/js/config.js).
+            // health-agent:GenerateMedicalCodes is a gated preview feature; without it,
+            // CPT only ever comes from a narrow Bedrock E&M-classification fallback, not
+            // real procedure coding. Left in place (not deleted) so it's a one-flag flip
+            // back on once gated access is granted -- see CLAUDE.md.
+            if (window.SHOW_CPT_CODES) {
             html += '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;padding:10px 0 4px;margin-top:8px;border-bottom:1px solid #f1f5f9;">CPT Procedure Codes</div>';
             if (cptCodes.length === 0) {
                 html += '<div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No procedure codes detected</div>';
@@ -1234,7 +1228,8 @@
                     html += '</div></div>';
                 }
             }
-            
+            } // end window.SHOW_CPT_CODES
+
             html += '</div>';
             panel.innerHTML = html;
             panel.style.display = 'block';
