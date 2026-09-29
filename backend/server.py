@@ -235,7 +235,7 @@ def list_patients():
                 'gender': patient.get('gender', '').capitalize(),
                 'birthDate': birth_date,
                 'age': age,
-                'mrn': patient['id'][:8]
+                'mrn': patient['id']
             })
         
         return jsonify({

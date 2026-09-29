@@ -1361,7 +1361,7 @@
                         <span class="separator">•</span>
                         <span>${escapeHtml(patient.gender || 'N/A')}</span>
                         <span class="separator">•</span>
-                        <span>MRN: ${escapeHtml(patient.mrn)}</span>
+                        <span>MRN: <span class="patient-mrn-value" title="${escapeHtml(patient.mrn)} (click to copy)" onclick="event.stopPropagation(); copyAvsId(this)">${escapeHtml(patient.mrn)}</span></span>
                     </div>
                 </div>
                 <div class="patient-badges">
@@ -1386,7 +1386,11 @@
 
         // Update MRN
         const mrnEl = document.getElementById('headerPatientMRN');
-        if (mrnEl) mrnEl.textContent = 'MRN: ' + info.mrn;
+        if (mrnEl) {
+            mrnEl.textContent = 'MRN: ' + info.mrn;
+            mrnEl.title = info.mrn + ' (click to copy)';
+            mrnEl.onclick = () => copyAvsId(mrnEl);
+        }
 
         // Update demographics
         const demoEl = document.getElementById('headerPatientDemo');

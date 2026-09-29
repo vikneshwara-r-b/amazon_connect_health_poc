@@ -20,6 +20,8 @@ Frontend            Backend               Streaming
    └──────────────► S3 (clinical notes, SOAP notes, medical codes, insights output)
 ```
 
+An editable, color-coded agentic flow diagram is at [`docs/point_of_care_portal_poc.drawio`](docs/point_of_care_portal_poc.drawio) — open it in [draw.io](https://app.diagrams.net), the VS Code Draw.io Integration extension, or import into Lucidchart.
+
 Two topologies, controlled by one `cdk.json` flag (`useCloudFront`):
 - **`useCloudFront: true`** (production-shaped): CloudFront in front of all three components — HTTPS for the frontend, an HTTPS proxy in front of the backend ALB, a WSS proxy in front of the streaming ALB.
 - **`useCloudFront: false`** (bypass mode): no CloudFront at all — frontend served via S3 static website hosting, backend/streaming reached directly via their ALBs over plain HTTP/WS. Useful for quick sandbox testing. **No TLS anywhere in this mode** — fine for temporary testing, not for sharing beyond that.

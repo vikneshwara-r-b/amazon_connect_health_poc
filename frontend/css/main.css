@@ -247,6 +247,13 @@
             font-size: 14px;
             font-weight: 400;
             color: #9ca3af;
+            display: inline-block;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+            cursor: copy;
         }
 
         .patient-demographics {
@@ -6949,6 +6956,16 @@
             color: #d1d5db;
             font-weight: 400;
             margin: 0 2px;
+        }
+
+        .patient-mrn-value {
+            display: inline-block;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+            cursor: copy;
         }
 
         .patient-detail-item {
