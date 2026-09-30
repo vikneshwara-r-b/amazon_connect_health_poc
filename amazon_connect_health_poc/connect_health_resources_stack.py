@@ -5,6 +5,7 @@ from aws_cdk import (
     aws_healthlake as healthlake,
     aws_iam as iam,
     aws_lambda as lambda_,
+    aws_ssm as ssm,
 )
 from constructs import Construct
 
@@ -27,6 +28,20 @@ class ConnectHealthResourcesStack(Stack):
     preview service). Domain and Subscription creation therefore go through
     Lambda-backed custom resources calling boto3's connecthealth client directly,
     same pattern as the demo-user custom resource in cognito_stack.py.
+
+    All three IDs are also published to SSM Parameter Store (/connect-health/<env>/...)
+    so BackendStack/StreamingStack can read them via `ssm.StringParameter.
+    value_for_string_parameter()` instead of a direct CDK cross-stack reference. A
+    direct reference (`prereqs_stack.healthlake_datastore_id` passed straight into
+    another stack's constructor) becomes a CloudFormation `Fn::ImportValue` export,
+    and CloudFormation refuses to delete a stack while another live stack imports
+    its export -- which made this stack (and its costly HealthLake datastore)
+    undeletable on its own, only via `cdk destroy "*"`. The SSM parameter is a
+    plain string CloudFormation resolves at deploy time, with no export/import
+    lock, so `cdk destroy AmazonConnectHealthPrereqs` now works standalone.
+    Consumers only get the *value at their own last deploy* this way, so recreating
+    this stack (new IDs) needs Backend/Streaming redeployed afterwards to pick up
+    the new SSM values -- same two-step recreate flow this app already documents.
 
     CONFIRMED (via a real deploy's CloudWatch logs): the connecthealth boto3
     client uses lowerCamelCase member names throughout (name, domainId,
@@ -57,6 +72,7 @@ class ConnectHealthResourcesStack(Stack):
         scope: Construct,
         construct_id: str,
         *,
+        environment: str = "dev",
         connect_health_domain_name: str = "connect-health-demo",
         existing_domain_id: str | None = None,
         existing_subscription_id: str | None = None,
@@ -182,6 +198,7 @@ def handler(event, context):
                     actions=[
                         "health-agent:CreateSubscription",
                         "health-agent:DeleteSubscription",
+                        "health-agent:DeactivateSubscription",
                     ],
                     resources=["*"],
                 )
@@ -222,12 +239,23 @@ def handler(event, context):
 
     if request_type == 'Delete':
         # Best-effort: never block stack deletion on this preview service.
+        #
+        # CONFIRMED (via a real AttributeError, then a live boto3 client
+        # introspection): this API has no delete_subscription operation at
+        # all -- a Subscription can only be deactivated, never deleted. The
+        # bug this comment replaces (calling the nonexistent delete_subscription)
+        # silently no-op'd here every time, which meant Subscriptions were
+        # never actually removed -- and since a Domain can't be deleted while
+        # it still has an active Subscription (DeleteDomain fails with
+        # "Unable to delete Domain as there are resources inside"), every past
+        # destroy left both the Subscription AND the Domain orphaned in AWS
+        # even though this best-effort handler always reported SUCCESS.
         try:
             domain_id = event['ResourceProperties']['DomainId']
             subscription_id = event['PhysicalResourceId']
-            client.delete_subscription(domainId=domain_id, subscriptionId=subscription_id)
+            client.deactivate_subscription(domainId=domain_id, subscriptionId=subscription_id)
         except Exception as e:
-            print(f'Ignoring error deleting subscription (best-effort): {e}')
+            print(f'Ignoring error deactivating subscription (best-effort): {e}')
         cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
         return
 
@@ -248,3 +276,24 @@ def handler(event, context):
             if not existing_domain_id:
                 subscription_resource.node.add_dependency(domain_resource)
             self.subscription_id = subscription_resource.get_att_string("SubscriptionId")
+
+        # --- Publish IDs to SSM (see class docstring: decouples this stack's
+        # lifecycle from Backend/Streaming so it can be destroyed/recreated alone) --
+        ssm.StringParameter(
+            self,
+            "HealthlakeDatastoreIdParam",
+            parameter_name=f"/connect-health/{environment}/healthlakeDatastoreId",
+            string_value=self.healthlake_datastore_id,
+        )
+        ssm.StringParameter(
+            self,
+            "DomainIdParam",
+            parameter_name=f"/connect-health/{environment}/domainId",
+            string_value=self.domain_id,
+        )
+        ssm.StringParameter(
+            self,
+            "SubscriptionIdParam",
+            parameter_name=f"/connect-health/{environment}/subscriptionId",
+            string_value=self.subscription_id,
+        )

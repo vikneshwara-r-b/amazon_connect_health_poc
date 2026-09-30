@@ -518,308 +518,6 @@ function expandToSize1() {
 }
 
 
-// ==========================================================================
-
-// FLAG A MOMENT FUNCTIONALITY
-
-// ==========================================================================
-
-let flaggedMoments = [];
-
-let flagCounter = 0;
-
-
-function flagMoment() {
-
-    if (!isConsultationActive) {
-
-        return;
-
-    }
-
-
-    const currentTime = new Date();
-
-    const consultationDuration = currentTime - consultationStartTime - pausedDuration;
-
-    const flagButtonSize2 = document.querySelector('.consultation-overlay-size2 .flag-btn');
-
-    const flagButtonSize1 = document.querySelector('.scribe-control-btn.flag');
-
-    
-
-    // Create flag moment object
-
-    const flaggedMoment = {
-
-        id: ++flagCounter,
-
-        timestamp: currentTime,
-
-        consultationTime: consultationDuration,
-
-        clipStart: Math.max(0, consultationDuration - 10000), // 10 seconds before
-
-        clipEnd: consultationDuration + 10000, // 10 seconds after (20 second total clip)
-
-        formattedTime: formatTime(consultationDuration),
-
-        note: '' // Can be added later
-
-    };
-
-
-    // Add to flagged moments array
-
-    flaggedMoments.push(flaggedMoment);
-
-
-    // Update counter on both buttons
-
-    updateFlagCounter();
-
-
-    // Visual feedback for both size 1 and size 2 overlays
-
-    if (flagButtonSize2) {
-
-        flagButtonSize2.classList.add('flagged');
-
-        setTimeout(() => {
-
-            flagButtonSize2.classList.remove('flagged');
-
-        }, 300);
-
-    }
-
-
-    if (flagButtonSize1) {
-
-        flagButtonSize1.classList.add('flagged');
-
-        setTimeout(() => {
-
-            flagButtonSize1.classList.remove('flagged');
-
-        }, 300);
-
-    }
-
-
-    // Show brief notification
-
-    showFlagNotification(flaggedMoment);
-
-}
-
-
-function updateFlagCounter() {
-
-    const flagButtonSize2 = document.querySelector('.consultation-overlay-size2 .flag-btn');
-
-    const flagButtonSize1 = document.querySelector('.scribe-control-btn.flag');
-
-    const count = flaggedMoments.length;
-
-
-    // Update size 2 overlay button
-
-    if (flagButtonSize2) {
-
-        flagButtonSize2.setAttribute('data-flag-count', count);
-
-        if (count > 0) {
-
-            flagButtonSize2.title = `Flag a Moment (${count} flagged)`;
-
-        } else {
-
-            flagButtonSize2.title = 'Flag a Moment';
-
-        }
-
-    }
-
-
-    // Update size 1 overlay button
-
-    if (flagButtonSize1) {
-
-        flagButtonSize1.setAttribute('data-flag-count', count);
-
-        if (count > 0) {
-
-            flagButtonSize1.title = `Flag a Moment (${count} flagged)`;
-
-        } else {
-
-            flagButtonSize1.title = 'Flag a Moment';
-
-        }
-
-    }
-
-}
-
-
-function clearFlaggedMoments() {
-
-    flaggedMoments = [];
-
-    flagCounter = 0;
-
-    updateFlagCounter(); // Reset counter display
-
-}
-
-
-// Keyboard shortcut for Flag a Moment (Spacebar)
-
-document.addEventListener('keydown', function(event) {
-
-    // Check if spacebar is pressed
-
-    if (event.code === 'Space' || event.keyCode === 32) {
-
-        // Don't trigger if user is typing in an input or textarea
-
-        const activeElement = document.activeElement;
-
-        const isInputField = activeElement && (
-
-            activeElement.tagName === 'INPUT' || 
-
-            activeElement.tagName === 'TEXTAREA' || 
-
-            activeElement.isContentEditable
-
-        );
-
-        
-
-        // Only trigger if consultation is active and not typing
-
-        if (!isInputField && isConsultationActive) {
-
-            event.preventDefault(); // Prevent page scroll
-
-            flagMoment();
-
-        }
-
-    }
-
-});
-
-
-function showFlagNotification(flaggedMoment) {
-
-    // Determine which overlay is active and show notification on that overlay
-
-    const consultationOverlay = document.getElementById('consultationOverlay');
-
-    const consultationOverlaySize2 = document.getElementById('consultationOverlaySize2');
-
-    
-
-    let targetOverlay = null;
-
-    let notificationClass = '';
-
-    let contentClass = '';
-
-    
-
-    // Check which overlay is active
-
-    if (consultationOverlay && consultationOverlay.classList.contains('active')) {
-
-        targetOverlay = consultationOverlay;
-
-        notificationClass = 'flag-notification-size1';
-
-        contentClass = 'flag-notification-size1-content';
-
-    } else if (consultationOverlaySize2 && consultationOverlaySize2.classList.contains('active')) {
-
-        targetOverlay = consultationOverlaySize2;
-
-        notificationClass = 'flag-notification-size2';
-
-        contentClass = 'flag-notification-size2-content';
-
-    }
-
-    
-
-    if (!targetOverlay) return;
-
-
-    // Create notification element
-
-    const notification = document.createElement('div');
-
-    notification.className = notificationClass;
-
-    // nosemgrep: insecure-innerhtml — static SVG + escapeHtml on the only dynamic value (formattedTime)
-    const _html1 = `
-
-        <div class="${contentClass}">
-
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-
-                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-
-                <line x1="4" y1="22" x2="4" y2="15"/>
-
-            </svg>
-
-            <span>Moment flagged at ${escapeHtml(flaggedMoment.formattedTime)}</span>
-
-        </div>
-
-    `;
-    notification.innerHTML = _html1; // nosemgrep: insecure-innerhtml, insecure-document-method
-
-
-    // Add to the appropriate overlay
-
-    // The overlay already has proper positioning context, no need to change it
-
-    targetOverlay.appendChild(notification);
-
-
-    // Animate in
-
-    setTimeout(() => {
-
-        notification.classList.add('show');
-
-    }, 10);
-
-
-    // Remove after 3 seconds
-
-    setTimeout(() => {
-
-        notification.classList.remove('show');
-
-        setTimeout(() => {
-
-            if (notification.parentNode) {
-
-                notification.parentNode.removeChild(notification);
-
-            }
-
-        }, 300);
-
-    }, 3000);
-
-}
-
-
 function formatTime(milliseconds) {
 
     const minutes = Math.floor(milliseconds / 60000);
@@ -908,6 +606,27 @@ function addTranscriptEntry(text, isFinal) {
     }
 }
 
+// Custom visit priorities are authored on the pre-visit page (previsit-iframe.html), which
+// stores them per patient in localStorage. Same origin, so read the same key here.
+function getCustomVisitPriorities(patientId) {
+    if (!patientId) return [];
+    try {
+        const arr = JSON.parse(localStorage.getItem('customVisitPriorities:' + patientId) || '[]');
+        return Array.isArray(arr)
+            ? arr.filter(x => x && (typeof x.title === 'string' || typeof x.description === 'string'))
+                .map(x => ({ title: String(x.title || ''), description: String(x.description || '') }))
+                .filter(x => x.title || x.description)
+            : [];
+    } catch (e) { return []; }
+}
+
+// The iframe is a separate same-origin document, so its edits fire 'storage' here.
+window.addEventListener('storage', function(event) {
+    if (event.key && event.key.startsWith('customVisitPriorities:') && scribePrioritiesVisible) {
+        populateScribePriorities();
+    }
+});
+
 function populateScribePriorities() {
     const content = document.getElementById('prioritiesContent');
     if (!content) return;
@@ -927,10 +646,13 @@ function populateScribePriorities() {
         }
     } catch(e) {}
     
-    if (!priorities) {
+    const customPriorities = getCustomVisitPriorities(window.currentPatientId);
+
+    if (!priorities && !customPriorities.length) {
         content.innerHTML = '<div class="transcript-placeholder">Priorities will appear after patient data loads</div>';
         return;
     }
+    priorities = priorities || {};
     
     let html = '';
     let idx = 0;
@@ -969,6 +691,22 @@ function populateScribePriorities() {
         });
     }
 
+    if (customPriorities.length > 0) {
+        html += '<div class="priority-subsection-header">CUSTOM VISIT PRIORITIES</div>';
+        customPriorities.forEach((p, n) => {
+            const id = 'priCustom' + (n + 1);
+            // nosemgrep: insecure-document-method, html-in-template-string, detect-non-literal-regexp, unsafe-formatstring
+            html += `<div class="priority-check-item custom" id="${id}Card">
+                <input type="checkbox" id="${id}Check" onchange="document.getElementById('${id}Card').classList.toggle('checked-off', this.checked)">
+                <div class="priority-check-content">
+                    <div class="priority-check-title">${escapeHtml(p.title)}</div>
+                    ${p.description ? `<div class="priority-check-desc">${escapeHtml(p.description)}</div>` : ''}
+                </div>
+            </div>`;
+        });
+        idx += customPriorities.length;
+    }
+
     if (idx === 0) {
         content.textContent = 'No priorities available';
         return;
@@ -995,20 +733,13 @@ function resetScribeSidebar() {
 }
 
 
-function getFlaggedMoments() {
-
-    return flaggedMoments;
-
-}
-
-
 // ==========================================================================
 
 // EHR SAVE NOTIFICATION & COMPLETION OVERLAY
 
 // ==========================================================================
 
-function showEHRSaveNotification() {
+function showEHRSaveNotification(success = true, message = null) {
 
     const soapOverlay = document.getElementById('soapNotesOverlay');
 
@@ -1019,7 +750,12 @@ function showEHRSaveNotification() {
 
     const notification = document.createElement('div');
 
-    notification.className = 'ehr-save-notification';
+    notification.className = 'ehr-save-notification' + (success ? '' : ' error');
+
+    const icon = success
+        ? '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'
+        : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
+    const text = message || (success ? 'Documentation saved' : 'Failed to save documentation');
 
     notification.innerHTML = `
 
@@ -1027,17 +763,15 @@ function showEHRSaveNotification() {
 
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-
-                <polyline points="22 4 12 14.01 9 11.01"/>
+                ${icon}
 
             </svg>
 
-            <span>Documentation saved</span>
+            <span>${escapeHtml(text)}</span>
 
         </div>
 
-    `;
+    `; // nosemgrep: insecure-document-method, html-in-template-string — icon is a fixed literal, text is escapeHtml()'d
 
 
     soapOverlay.appendChild(notification);
@@ -4644,12 +4378,6 @@ function resetScribeInterfaceContent() {
 
             <!-- Toggle Icons Row -->
             <div class="scribe-toggle-row">
-                <button class="scribe-toggle-btn" onclick="flagMoment()" title="Flag a Moment (Spacebar)" data-flag-count="0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-                        <line x1="4" y1="22" x2="4" y2="15"/>
-                    </svg>
-                </button>
                 <button class="scribe-toggle-btn" id="toggleTranscriptBtn" onclick="toggleScribeTranscript()" title="Toggle Live Transcription">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
@@ -4665,11 +4393,6 @@ function resetScribeInterfaceContent() {
                         <path d="M9 14l2 2 4-4"/>
                     </svg>
                 </button>
-            </div>
-            
-            <!-- Keyboard Shortcut Hint -->
-            <div class="keyboard-hint">
-                <kbd>Space</kbd> to flag a moment
             </div>
         `;
 
@@ -4713,13 +4436,7 @@ function startConsultationRecording() {
 
     
 
-    // Reset flag counter and moments
-
-    flaggedMoments = [];
-
-    flagCounter = 0;
-
-    updateFlagCounter();
+    resetAvsEditState();
 
     
 
@@ -4785,13 +4502,7 @@ function actuallyStartConsultation() {
 
     
 
-    // Reset flag counter and moments
-
-    flaggedMoments = [];
-
-    flagCounter = 0;
-
-    updateFlagCounter();
+    resetAvsEditState();
 
     
 
@@ -5649,26 +5360,6 @@ function startProcessingWorkflowInOverlay() {
 
                     </div>
 
-                    
-
-                    <div class="processing-step" id="inlineStep4">
-
-                        <div class="step-icon">
-
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-
-                                <polyline points="16 18 22 12 16 6"/>
-
-                                <polyline points="8 6 2 12 8 18"/>
-
-                            </svg>
-
-                        </div>
-
-                        <span class="step-text">Generating medical codes</span>
-
-                    </div>
-
                 </div>
 
             </div>
@@ -5728,17 +5419,10 @@ async function startRealProcessingWithS3Polling() {
             markStepActive('inlineStep2');
         }, 1500);
         
-        setTimeout(() => {
+        setTimeout(async () => {
             markStepCompleted('inlineStep2');
             markStepActive('inlineStep3');
-        }, 3000);
-        
-        setTimeout(() => {
-            markStepCompleted('inlineStep3');
-            markStepActive('inlineStep4');
-        }, 4500);
-        
-        setTimeout(async () => {
+
             // Fetch cached data from backend (demo header is auto-injected by fetch interceptor)
             try {
                 const response = await fetch(`${backendUrl}/api/streaming/session/${sessionId}/outputs`);
@@ -5752,11 +5436,13 @@ async function startRealProcessingWithS3Polling() {
             } catch (e) {
                 console.warn('[Processing] DEMO — failed to fetch cached data:', e);
             }
-            
-            markStepCompleted('inlineStep4');
-            setTimeout(() => transitionToSoapNotes(), 500);
-        }, 5500);
-        
+
+            setTimeout(() => {
+                markStepCompleted('inlineStep3');
+                setTimeout(() => transitionToSoapNotes(), 500);
+            }, 1500);
+        }, 3000);
+
         return;
     }
     
@@ -5772,8 +5458,7 @@ async function startRealProcessingWithS3Polling() {
     
     let hasTranscript = false;
     let hasClinicalDoc = false;
-    let hasMedicalCodes = false;
-    
+
     async function pollS3() {
         const elapsed = Date.now() - startTime;
         
@@ -5806,40 +5491,24 @@ async function startRealProcessingWithS3Polling() {
                     }
                     markStepCompleted('inlineStep2');
                     markStepActive('inlineStep3');
-                    
-                    // Brief delay then complete step 3
-                    setTimeout(() => {
-                        markStepCompleted('inlineStep3');
-                        markStepActive('inlineStep4');
-                    }, 500);
-                    
+
                     // Store the clinical doc
                     processingS3Data = processingS3Data || {};
                     processingS3Data.clinicalDoc = outputs.clinicalDoc;
                     console.log('[Processing] Clinical doc ready');
-                }
-                
-                // Check medical codes (Step 4)
-                if (!hasMedicalCodes && outputs.medicalCodes && !outputs.medicalCodes.error) {
-                    hasMedicalCodes = true;
-                    markStepCompleted('inlineStep4');
-                    
-                    // Store the medical codes
-                    processingS3Data = processingS3Data || {};
-                    processingS3Data.medicalCodes = outputs.medicalCodes;
-                    console.log('[Processing] Medical codes ready');
-                    
-                    // All done! Transition to SOAP notes
+
+                    // Fetch ICD-10 codes now (backend sessionId mode) and wait
+                    // for them here, so the Clinical Documentation page opens
+                    // with codes already in hand instead of showing its own
+                    // separate loading state right after this one closes.
+                    await prefetchMedicalCodes(sessionId);
+
                     setTimeout(() => {
-                        transitionToSoapNotes();
+                        markStepCompleted('inlineStep3');
+                        setTimeout(() => {
+                            transitionToSoapNotes();
+                        }, 500);
                     }, 500);
-                    return;
-                }
-                
-                // If we have clinical doc but not codes yet, keep polling
-                if (hasClinicalDoc && !hasMedicalCodes) {
-                    // Continue polling for medical codes
-                    setTimeout(pollS3, POLL_INTERVAL);
                     return;
                 }
             }
@@ -5895,7 +5564,7 @@ function markStepCompleted(stepId) {
  * Complete any remaining steps quickly and transition
  */
 function completeRemainingSteps() {
-    const steps = ['inlineStep1', 'inlineStep2', 'inlineStep3', 'inlineStep4'];
+    const steps = ['inlineStep1', 'inlineStep2', 'inlineStep3'];
     let delay = 0;
     
     steps.forEach(stepId => {
@@ -5921,8 +5590,7 @@ function runSimulatedProcessingSteps() {
     const steps = [
         { id: 'inlineStep1', duration: 1000 },
         { id: 'inlineStep2', duration: 1250 },
-        { id: 'inlineStep3', duration: 1000 },
-        { id: 'inlineStep4', duration: 750 }
+        { id: 'inlineStep3', duration: 1000 }
     ];
 
     let currentStep = 0;
@@ -6167,6 +5835,10 @@ async function showSoapNotes() {
             if (!streamingSessionOutputs) streamingSessionOutputs = {};
             streamingSessionOutputs.medicalCodes = processingS3Data.medicalCodes;
         }
+        if (processingS3Data.afterVisitSummary) {
+            if (!streamingSessionOutputs) streamingSessionOutputs = {};
+            streamingSessionOutputs.afterVisitSummary = processingS3Data.afterVisitSummary;
+        }
         processingS3Data = null;
     } else if (currentStreamingSessionId && (!streamingSessionOutputs || !streamingSessionOutputs.clinicalDoc)) {
         console.log('[SOAP] Fetching S3 outputs for session:', currentStreamingSessionId);
@@ -6346,6 +6018,15 @@ async function fetchAndDisplayAfterVisitSummary() {
     
     if (!contentDiv) return;
     
+    // Clinician edited the summary: show that, not the original from S3.
+    if (window.editedAvs) {
+        const segs = flattenEditedAvs();
+        if (segs.length) {
+            displayAfterVisitSummary({ SummarizedSegments: segs.map(t => ({ Text: t })) });
+            return;
+        }
+    }
+    
     // If no session ID, show default message
     if (!sessionId) {
         contentDiv.innerHTML = `
@@ -6454,6 +6135,12 @@ async function fetchAndPopulatePatientVisitSummary() {
     
     // Populate date and visit type immediately
     populatePatientSummaryMeta();
+    
+    // Already edited in this consultation: keep the clinician's edits.
+    if (window.editedAvs) {
+        applyEditedAvsToDom();
+        return;
+    }
     
     // Show loading state
     if (loadingDiv) loadingDiv.style.display = 'flex';
@@ -6617,6 +6304,234 @@ function toggleSectionVisibility(sectionId, visible) {
     const section = document.getElementById(sectionId);
     if (section) {
         section.style.display = visible ? 'block' : 'none';
+    }
+}
+
+
+// ==========================================================================
+// AFTER VISIT SUMMARY: editing, IDs, and save-to-EHR on Continue
+// ==========================================================================
+
+const AVS_SECTIONS = [
+    { key: 'howYoureDoing', section: 'summaryHowYoureDoing', content: 'summaryHowYoureDoingContent', title: "How you're doing", checklist: false },
+    { key: 'whatsChanging', section: 'summaryWhatsChanging', content: 'summaryWhatsChangingContent', title: "What's changing", checklist: false },
+    { key: 'whatYouCanDo', section: 'summaryWhatYouCanDo', content: 'summaryWhatYouCanDoContent', title: 'What you can do', checklist: true },
+    { key: 'seeYouSoon', section: 'summarySeeYouSoon', content: 'summarySeeYouSoonContent', title: 'See you soon', checklist: false }
+];
+const AVS_ITEM_SELECTOR = '.patient-summary-item, .checklist-item';
+
+window.editedAvs = null;        // { key: [text, ...] } once the clinician has edited/saved
+window.avsSavedFingerprint = null;
+window._avsSaving = false;
+
+function resetAvsEditState() {
+    window.editedAvs = null;
+    window.avsSavedFingerprint = null;
+    window._avsSaving = false;
+    window._soapSaving = false;
+    const content = document.getElementById('patientSummaryContent');
+    if (content) content.classList.remove('avs-editing');
+    document.querySelectorAll('.avs-add-btn').forEach(b => b.remove());
+    setAvsEditLabel(false);
+    setAvsSaveState('idle');
+}
+
+function updateAvsIds() {
+    const set = (id, value, fallback) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value || fallback;
+        el.title = value ? `${value} (click to copy)` : '';
+    };
+    set('patientSummaryPatientId', window.currentPatientId, '—');
+    set('patientSummaryEncounterId', window.currentEncounterId, 'Not linked');
+}
+
+function copyAvsId(el) {
+    const value = (el.title || '').replace(/ \(click to copy\)$/, '');
+    if (!value) return;
+    try { navigator.clipboard.writeText(value); showMinimalNotification('ID copied'); } catch (e) { /* clipboard unavailable */ }
+}
+
+function collectAvsFromDom() {
+    const result = {};
+    AVS_SECTIONS.forEach(sec => {
+        const container = document.getElementById(sec.content);
+        result[sec.key] = container
+            ? Array.from(container.children)
+                .filter(el => el.matches(AVS_ITEM_SELECTOR))
+                .map(el => (el.querySelector(':scope > span:not(.avs-item-delete)')?.textContent || '').replace(/\s+/g, ' ').trim())
+                .filter(Boolean)
+            : [];
+    });
+    return result;
+}
+
+function flattenEditedAvs() {
+    const avs = window.editedAvs || {};
+    return AVS_SECTIONS.flatMap(sec => avs[sec.key] || []);
+}
+
+function buildAvsText(avs) {
+    return AVS_SECTIONS
+        .filter(sec => (avs[sec.key] || []).length)
+        .map(sec => `${sec.title}\n` + avs[sec.key].map(t => `- ${t}`).join('\n'))
+        .join('\n\n');
+}
+
+function applyEditedAvsToDom() {
+    AVS_SECTIONS.forEach(sec => {
+        const items = (window.editedAvs || {})[sec.key] || [];
+        populateSummarySection(sec.content, items, sec.checklist ? 'checklist' : 'list');
+        toggleSectionVisibility(sec.section, items.length > 0);
+    });
+    const loadingDiv = document.getElementById('patientSummaryLoading');
+    const contentDiv = document.getElementById('patientSummaryContent');
+    if (loadingDiv) loadingDiv.style.display = 'none';
+    if (contentDiv) contentDiv.style.display = 'block';
+}
+
+function setAvsEditLabel(editing) {
+    const label = document.getElementById('avsEditToggleLabel');
+    if (label) label.textContent = editing ? 'Done editing' : 'Edit Summary';
+}
+
+function decorateAvsItem(item) {
+    const span = item.querySelector(':scope > span');
+    if (!span) return;
+    span.setAttribute('contenteditable', 'true');
+    span.setAttribute('role', 'textbox');
+    if (!item.querySelector(':scope > .avs-item-delete')) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'avs-item-delete';
+        del.setAttribute('contenteditable', 'false');
+        del.setAttribute('aria-label', 'Delete item');
+        del.textContent = '×';
+        del.addEventListener('click', () => item.remove());
+        item.appendChild(del);
+    }
+}
+
+function addAvsItem(key) {
+    const sec = AVS_SECTIONS.find(s => s.key === key);
+    const container = sec && document.getElementById(sec.content);
+    if (!container) return;
+    const item = document.createElement('div');
+    item.className = sec.checklist ? 'checklist-item' : 'patient-summary-item';
+    if (sec.checklist) {
+        const box = document.createElement('div');
+        box.className = 'checkbox-wrapper';
+        box.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>'; // nosemgrep: insecure-innerhtml — static literal, no user data
+        item.appendChild(box);
+    }
+    item.appendChild(document.createElement('span'));
+    container.appendChild(item);
+    decorateAvsItem(item);
+    item.querySelector(':scope > span').focus();
+}
+
+function toggleAvsEditMode() {
+    const content = document.getElementById('patientSummaryContent');
+    if (!content) return;
+    const editing = content.classList.toggle('avs-editing');
+    setAvsEditLabel(editing);
+
+    if (editing) {
+        AVS_SECTIONS.forEach(sec => {
+            toggleSectionVisibility(sec.section, true);
+            const container = document.getElementById(sec.content);
+            if (!container) return;
+            Array.from(container.children).filter(el => el.matches(AVS_ITEM_SELECTOR)).forEach(decorateAvsItem);
+            if (!container.parentElement.querySelector(`.avs-add-btn[data-key="${sec.key}"]`)) {
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'avs-add-btn';
+                add.dataset.key = sec.key;
+                add.textContent = '+ Add item';
+                add.addEventListener('click', () => addAvsItem(sec.key));
+                container.after(add);
+            }
+        });
+        const firstSpan = content.querySelector('[contenteditable="true"]');
+        if (firstSpan) firstSpan.focus();
+        return;
+    }
+
+    // Leaving edit mode: rebuild clean items from what was typed, hide empty sections.
+    window.editedAvs = collectAvsFromDom();
+    document.querySelectorAll('.avs-add-btn').forEach(b => b.remove());
+    applyEditedAvsToDom();
+    if (window.avsSavedFingerprint !== null && buildAvsText(window.editedAvs) !== window.avsSavedFingerprint) {
+        setAvsSaveState('idle', 'Edited since last save');
+    }
+}
+
+function setAvsSaveState(state, message) {
+    const btn = document.getElementById('avsContinueBtn');
+    const label = document.getElementById('avsContinueLabel');
+    const status = document.getElementById('avsSaveStatus');
+    if (btn) btn.disabled = state === 'saving';
+    if (label) label.textContent = state === 'saving' ? 'Saving\u2026' : 'Continue';
+    if (status) {
+        status.textContent = message || '';
+        status.className = 'avs-save-status' + (state === 'saved' ? ' ok' : state === 'error' ? ' error' : '');
+    }
+}
+
+// Continue: save the (possibly edited) After Visit Summary to the EHR first, then move on.
+// If the save fails the clinician stays on this screen with the error and can retry.
+async function continueAfterVisitSummary() {
+    if (window._avsSaving) return;
+    const saved = await saveAvsToEhr();
+    if (saved) showFinalCompletionOverlay();
+}
+
+// Returns true when there is nothing left to save (saved now, already saved, or nothing to save).
+async function saveAvsToEhr() {
+    if (window._avsSaving) return false;
+
+    // Commit any in-progress edits first.
+    const content = document.getElementById('patientSummaryContent');
+    if (content && content.classList.contains('avs-editing')) toggleAvsEditMode();
+
+    const avs = window.editedAvs || collectAvsFromDom();
+    const text = buildAvsText(avs);
+    if (!text || !window.currentPatientId) return true;   // nothing to save / no patient to save to
+    if (window.avsSavedFingerprint === text) return true;  // unchanged since the last successful save
+
+    window._avsSaving = true;
+    setAvsSaveState('saving', 'Saving to HealthLake\u2026');
+    const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
+    try {
+        const resp = await fetch(`${backendUrl}/api/fhir/patient/${encodeURIComponent(window.currentPatientId)}/document-reference`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind: 'avs', encounterId: window.currentEncounterId || '', content: text })
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Save failed');
+
+        let message = 'Saved to EHR.';
+        if (window.currentEncounterId) {
+            try {
+                const fin = await fetch(`${backendUrl}/api/fhir/encounter/${encodeURIComponent(window.currentEncounterId)}/finish`, { method: 'POST' });
+                const finData = await fin.json();
+                if (!finData.success) message = 'Saved to EHR, but the encounter could not be marked finished.';
+            } catch (e) {
+                message = 'Saved to EHR, but the encounter could not be marked finished.';
+            }
+        }
+        window.editedAvs = avs;
+        window.avsSavedFingerprint = text;
+        setAvsSaveState('saved', message);
+        return true;
+    } catch (e) {
+        console.error('[EHR] AVS save failed:', e);
+        setAvsSaveState('error', 'Could not save to the EHR. Click Continue to try again.');
+        return false;
+    } finally {
+        window._avsSaving = false;
     }
 }
 
@@ -7360,6 +7275,17 @@ function editSoapNotes() {
 
 
 async function pollForMedicalCodes(sessionId, attempt = 0) {
+    // health-agent:GenerateMedicalCodes is never called server-side in this mode
+    // (backend/server.py skips it entirely -- see MEDICAL_CODES_PROVIDER), so
+    // medicalCodes.json will never be written to S3. Polling for it here would
+    // just be a guaranteed 90s wait before falling through anyway -- go straight
+    // to the direct-call fallback instead.
+    if (attempt === 0 && window.MEDICAL_CODES_PROVIDER === 'comprehend-medical') {
+        console.log('[PollCodes] Provider is comprehend-medical, skipping S3 poll');
+        generateAndDisplayMedicalCodes();
+        return;
+    }
+
     const MAX_ATTEMPTS = 30; // 30 x 3s = 90 seconds
     const DELAY = 3000;
     const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
@@ -7379,6 +7305,7 @@ async function pollForMedicalCodes(sessionId, attempt = 0) {
             sendCodesToIframe();
             linkEvidenceToSoapText(codes);
             setTimeout(initCodeTextHandlers, 200);
+            revealClinicalDocumentation();
             return;
         }
     } catch (e) {
@@ -7389,7 +7316,53 @@ async function pollForMedicalCodes(sessionId, attempt = 0) {
         console.log(`[PollCodes] Codes not ready, retry ${attempt + 1}/${MAX_ATTEMPTS}...`);
         setTimeout(() => pollForMedicalCodes(sessionId, attempt + 1), DELAY);
     } else {
-        console.log('[PollCodes] Gave up after max attempts');
+        // AWS's post-stream medical-coding pipeline never wrote medicalCodes.json
+        // for this session (expected while health-agent:GenerateMedicalCodes is
+        // gated -- see CLAUDE.md). This used to be a dead end: no fallback ran, and
+        // the sidebar was silently left on its empty/loading state forever, with
+        // no network call ever reaching POST /api/medical-codes. Fall through to
+        // the same direct-call path (with its own Comprehend Medical + Bedrock
+        // fallback) that the rest of the app already relies on for this.
+        console.log('[PollCodes] Gave up after max attempts, falling back to direct API call');
+        generateAndDisplayMedicalCodes();
+    }
+}
+
+
+async function pollForSoapNote(sessionId, attempt = 0) {
+    const MAX_ATTEMPTS = 30; // 30 x 3s = 90 seconds
+    const DELAY = 3000;
+    const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
+
+    try {
+        const resp = await fetch(`${backendUrl}/api/streaming/session/${sessionId}/outputs`);
+        const data = await resp.json();
+
+        if (data.success && data.outputs && data.outputs.clinicalDoc && !data.outputs.clinicalDoc.error) {
+            console.log(`[PollSoap] SOAP note ready on attempt ${attempt + 1}`);
+            if (!streamingSessionOutputs) streamingSessionOutputs = {};
+            streamingSessionOutputs.clinicalDoc = data.outputs.clinicalDoc;
+            if (data.outputs.medicalCodes && !data.outputs.medicalCodes.error) {
+                streamingSessionOutputs.medicalCodes = data.outputs.medicalCodes;
+            }
+            // Re-render now the SOAP note exists — this also kicks off medical-code
+            // polling/generation, which must not start any earlier.
+            injectSoapIntoRightPanel();
+            return;
+        }
+    } catch (e) {
+        console.log(`[PollSoap] Fetch error on attempt ${attempt + 1}:`, e.message); // nosemgrep: insecure-document-method, html-in-template-string, detect-non-literal-regexp, unsafe-formatstring
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+        console.log(`[PollSoap] SOAP note not ready, retry ${attempt + 1}/${MAX_ATTEMPTS}...`);
+        setTimeout(() => pollForSoapNote(sessionId, attempt + 1), DELAY);
+    } else {
+        console.log('[PollSoap] Gave up waiting for SOAP note after max attempts');
+        const soapMain = document.querySelector('.soap-notes-main');
+        if (soapMain) soapMain.innerHTML = '<p style="color:#9ca3af;padding:16px;">No clinical documentation available.</p>';
+        renderMedicalCodesSidebar([]);
+        sendCodesToIframe();
     }
 }
 
@@ -7408,8 +7381,9 @@ async function regenerateCodesFromEditedNotes() {
         codeListContainer.innerHTML = `
             <div class="code-section-header">ICD-10 Diagnosis Codes</div>
             <div class="codes-loading"><div class="codes-loading-spinner"></div><span>Re-analyzing clinical text...</span></div>
+            ${window.SHOW_CPT_CODES ? `
             <div class="code-section-header" style="margin-top:12px;">CPT Procedure Codes</div>
-            <div class="codes-loading"><div class="codes-loading-spinner"></div><span>Generating codes...</span></div>
+            <div class="codes-loading"><div class="codes-loading-spinner"></div><span>Generating codes...</span></div>` : ''}
         `;
     }
 
@@ -7453,13 +7427,44 @@ async function regenerateCodesFromEditedNotes() {
 }
 
 
-function approveSoapNotes() {
+async function approveSoapNotes() {
 
     console.log('approveSoapNotes called');
 
+    // Approve & Sign can fire twice (double click / two buttons) — only save once.
+    if (window._soapSaving) return;
+    window._soapSaving = true;
+
+    // Build the content to persist from the live (possibly clinician-edited) SOAP
+    // note DOM, not the original fetched clinicalDoc object.
+    const soapMain = document.querySelector('.soap-notes-main');
+    let content = soapMain ? soapMain.innerText.trim() : '';
+
+    let saveSucceeded = false;
+    try {
+        const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
+        const resp = await fetch(`${backendUrl}/api/fhir/patient/${window.currentPatientId}/document-reference`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ encounterId: window.currentEncounterId, content })
+        });
+        const data = await resp.json();
+        saveSucceeded = !!data.success;
+        if (!saveSucceeded) console.error('[EHR] DocumentReference save failed:', data.error);
+    } catch (e) {
+        console.error('[EHR] DocumentReference save request failed:', e);
+    }
+
     // Show toast notification
 
-    showEHRSaveNotification();
+    showEHRSaveNotification(saveSucceeded);
+
+    if (!saveSucceeded) {
+        window._soapSaving = false;
+        // Don't silently proceed as if the note were saved — leave the SOAP modal
+        // open so the clinician can see the failure and retry Approve & Sign.
+        return;
+    }
 
     // Wait for notification, then show completion overlay
 
@@ -7475,6 +7480,28 @@ function approveSoapNotes() {
 
 }
 
+
+// Covers the Clinical Documentation panel with the same "Generating clinical
+// documentation..." loading state used while waiting for the SOAP note itself,
+// so the note and its ICD-10 codes appear together instead of the note
+// flashing in immediately while the codes sidebar visibly catches up a few
+// seconds later. The real note stays rendered underneath (not replaced) so
+// extractSoapNoteText() can still read it while code generation runs.
+function showClinicalDocumentationOverlay() {
+    const body = document.querySelector('.soap-inline-body');
+    if (!body || body.querySelector('.soap-reveal-overlay')) return;
+    body.style.position = 'relative';
+    const overlay = document.createElement('div');
+    overlay.className = 'soap-reveal-overlay';
+    overlay.style.cssText = 'position:absolute;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:5;';
+    overlay.innerHTML = '<div class="soap-loading"><div class="soap-loading-spinner"></div><span>Generating clinical documentation...</span></div>';
+    body.appendChild(overlay);
+}
+
+function revealClinicalDocumentation() {
+    const overlay = document.querySelector('.soap-reveal-overlay');
+    if (overlay) overlay.remove();
+}
 
 function injectSoapIntoRightPanel() {
     const rightPanel = document.querySelector('.right-panel');
@@ -7511,19 +7538,36 @@ function injectSoapIntoRightPanel() {
     // Use the existing displayClinicalDoc function (writes into .soap-notes-main)
     if (doc) {
         displayClinicalDoc(doc);
+    } else if (currentStreamingSessionId) {
+        // SOAP note not ready yet. Medical codes must not be generated until it
+        // exists -- the Comprehend Medical fallback reads the rendered SOAP text
+        // as its input -- so code polling is deferred to pollForSoapNote()'s
+        // success branch (which re-renders this panel once the note is ready).
+        const soapMain = document.querySelector('.soap-notes-main');
+        if (soapMain) soapMain.innerHTML = '<div class="soap-loading"><div class="soap-loading-spinner"></div><span>Generating clinical documentation...</span></div>';
+        const codeListContainer = document.querySelector('.code-list-sidebar');
+        if (codeListContainer) {
+            codeListContainer.innerHTML = '<div class="codes-loading"><div class="codes-loading-spinner"></div><span>Waiting for clinical notes...</span></div>';
+        }
+        sendCodesLoadingToIframe();
+        pollForSoapNote(currentStreamingSessionId);
+        return;
     } else {
         const soapMain = document.querySelector('.soap-notes-main');
         if (soapMain) soapMain.innerHTML = '<p style="color:#9ca3af;padding:16px;">No clinical documentation available.</p>';
     }
 
     // Display medical codes — if not available yet, poll for them
+    // (only reached once the SOAP note itself is confirmed present above)
     if (codes && codes.medicalCodes && codes.medicalCodes.length > 0) {
         displayMedicalCodesFromS3(codes);
         sendCodesToIframe();
         if (codes) linkEvidenceToSoapText(codes);
     } else if (currentStreamingSessionId) {
-        // Codes not ready — start polling
-        sendCodesToIframe(); // Show empty state immediately
+        // Codes not ready — hide the (already-rendered) note behind a shared
+        // loading overlay until codes catch up too, so both reveal together.
+        if (doc) showClinicalDocumentationOverlay();
+        sendCodesLoadingToIframe();
         pollForMedicalCodes(currentStreamingSessionId);
     } else {
         sendCodesToIframe(); // Show empty state
@@ -7537,6 +7581,15 @@ function linkEvidenceToSoapText(codesData) {
     const soapMain = document.querySelector('.soap-notes-main');
     if (!soapMain) return;
 
+    // Clear links from a previous generation (e.g. after Edit Notes -> Save
+    // Changes triggers regenerateCodesFromEditedNotes(), which re-links
+    // against this same DOM rather than a freshly rebuilt one) so this run
+    // isn't skipped -- below -- for paragraphs that still carry a stale span
+    // from the OLD codes list, pointing at a code no longer in the sidebar.
+    soapMain.querySelectorAll('.code-linked-text').forEach(span => {
+        span.replaceWith(document.createTextNode(span.textContent));
+    });
+
     const rawCodes = codesData.medicalCodes || codesData || [];
     const codeArray = Array.isArray(rawCodes) ? rawCodes : [];
     if (codeArray.length === 0) return;
@@ -7546,6 +7599,15 @@ function linkEvidenceToSoapText(codesData) {
     const seen = new Set();
     codeArray.forEach(code => {
         if (seen.has(code.name)) return;
+        // Don't link evidence for a code that isn't actually rendered anywhere
+        // (the CPT/E&M code when window.SHOW_CPT_CODES is false) -- otherwise
+        // its evidence text shows up as clickable/highlightable in the SOAP
+        // note with no matching .code-item-sidebar to activate, looking like
+        // broken ICD-10 linking when it's really just a hidden CPT code's
+        // evidence. Same system/regex check used when rendering the sidebar.
+        const sys = (code.system || '').toUpperCase();
+        const isCpt = sys === 'CPT' || (code.name && code.name.match(/^\d{5}$/));
+        if (isCpt && !window.SHOW_CPT_CODES) return;
         seen.add(code.name);
         if (code.evidence && Array.isArray(code.evidence)) {
             code.evidence.forEach(ev => {
@@ -7603,6 +7665,19 @@ function linkEvidenceToSoapText(codesData) {
     console.log('[Evidence] Linked', linkCount, 'evidence phrases to SOAP text from', evidenceLinks.length, 'candidates');
 }
 
+// Tells the previsit-iframe's Medical Codes panel to show its existing
+// "Re-analyzing clinical text..." loading state (previsit-iframe.html's
+// 'codes-loading' message handler) instead of a real (empty) codes payload.
+// Used at the two points where the frontend knows codes aren't ready yet, so
+// the ICD-10 Diagnosis Codes section shows a loader rather than a premature
+// "No diagnosis codes detected" via sendCodesToIframe()/showMedicalCodesPanel([]).
+function sendCodesLoadingToIframe() {
+    const iframe = document.getElementById('previsitIframe');
+    if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'codes-loading' }, window.location.origin);
+    }
+}
+
 function sendCodesToIframe() {
     const iframe = document.getElementById('previsitIframe');
     if (!iframe || !iframe.contentWindow) return;
@@ -7643,9 +7718,19 @@ function sendCodesToIframe() {
         console.log('[Codes] Sent empty codes to iframe');
     }
 
-    // Change iframe title to "Coding Insights"
+    // Change iframe title to "Coding Insights" -- and, the first time this
+    // happens, auto-minimize the panel so it opens closed by default (the
+    // clinician can restore it via the existing minimize/restore toggle).
+    // Guarded so a later codes update doesn't re-collapse a panel they've
+    // since reopened.
     const titleText = document.getElementById('previsitTitleText');
-    if (titleText) titleText.textContent = 'Coding Insights';
+    if (titleText && titleText.textContent !== 'Coding Insights') {
+        titleText.textContent = 'Coding Insights';
+        if (!window._codingInsightsAutoMinimized && typeof minimizeToCorner === 'function' && !isMinimized) {
+            window._codingInsightsAutoMinimized = true;
+            minimizeToCorner();
+        }
+    }
 }
 
 function initCodeTextHandlers() {
@@ -7660,27 +7745,20 @@ function initCodeTextHandlers() {
 }
 
 function toggleCodeTextHighlight(codeId) {
-    const allLinked = document.querySelectorAll('.code-linked-text');
-    const matching = document.querySelectorAll(`.code-linked-text[data-code="${codeId}"]`);
-    const wasHighlighted = matching.length > 0 && matching[0].classList.contains('highlighted');
-
-    // Clear all highlights
-    allLinked.forEach(el => el.classList.remove('highlighted'));
+    // Delegate to toggleCodeHighlight() -- the sidebar-click handler -- instead
+    // of reimplementing the toggle here. This used to only flip `.highlighted`
+    // on the clicked spans and message the previsit iframe, never touching
+    // `.code-item-sidebar`/`activeCodeHighlight`, so clicking linked text in the
+    // SOAP note could never highlight the corresponding sidebar code.
+    const wasActive = activeCodeHighlight === codeId;
+    toggleCodeHighlight(codeId);
 
     const iframe = document.getElementById('previsitIframe');
-
-    if (wasHighlighted) {
-        // Deselect — clear iframe highlights too
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({ type: 'clear-code-highlights' }, window.location.origin);
-        }
-    } else {
-        // Highlight matching text
-        matching.forEach(el => el.classList.add('highlighted'));
-        // Highlight code in iframe
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({ type: 'highlight-code', codeId: codeId }, window.location.origin);
-        }
+    if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(
+            wasActive ? { type: 'clear-code-highlights' } : { type: 'highlight-code', codeId: codeId },
+            window.location.origin
+        );
     }
 }
 
@@ -8142,10 +8220,6 @@ function switchTab(tabName) {
     } else if (tabName === 'transcript') {
 
         document.getElementById('transcriptTab').classList.add('active');
-
-    } else if (tabName === 'flagged') {
-
-        document.getElementById('flaggedTab').classList.add('active');
 
     }
 
@@ -8739,13 +8813,15 @@ function refreshHeaderData() {
 
         const now = new Date();
 
-        const timeString = now.toLocaleTimeString('en-US', { 
+        const timeString = now.toLocaleTimeString('en-US', {
 
-            hour: 'numeric', 
+            hour: 'numeric',
 
             minute: '2-digit',
 
-            hour12: true 
+            hour12: true,
+
+            timeZone: window.APP_TIMEZONE
 
         });
 
@@ -8937,7 +9013,8 @@ function clearAllTopicSelections() {
 
 
 // Auto-update timestamp every 30 seconds
-
+refreshHeaderData(); // populate immediately — setInterval alone leaves the static
+                      // "3:25 PM" placeholder markup on screen for up to 30s otherwise
 setInterval(refreshHeaderData, 30000);
 
 
@@ -8947,28 +9024,31 @@ setInterval(refreshHeaderData, 30000);
 
 /**
  * Fetch medical codes from the backend API
- * @param {string} clinicalText - The SOAP note text to analyze
+ * @param {string|null} clinicalText - The SOAP note text to analyze (ignored when sessionId is given)
  * @param {object} patientContext - Optional patient context (dateOfBirth, sex, status)
  * @param {object} encounterContext - Optional encounter context (encounterType, encounterFormat)
- * @returns {Promise<Array>} Array of medical codes
+ * @param {string|null} sessionId - When given, the backend reads+flattens clinicalDoc.json
+ *   from S3 itself instead of using clinicalText -- see backend/server.py's
+ *   generate_medical_codes() sessionId mode.
+ * @returns {Promise<Array>} Array of medical codes. If the backend's own S3 read
+ *   hasn't found clinicalDoc.json yet, returns an empty array with a `.notReady`
+ *   flag set, distinguishing "not ready yet" from "genuinely no codes found".
  */
-async function fetchMedicalCodes(clinicalText, patientContext = null, encounterContext = null) {
+async function fetchMedicalCodes(clinicalText, patientContext = null, encounterContext = null, sessionId = null) {
     try {
-        const requestBody = {
-            text: clinicalText
-        };
-        
+        const requestBody = sessionId ? { sessionId } : { text: clinicalText };
+
         if (patientContext) {
             requestBody.patientContext = patientContext;
         }
-        
+
         if (encounterContext) {
             requestBody.encounterContext = encounterContext;
         }
-        
+
         const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
-        console.log('Calling /api/medical-codes with text length:', clinicalText.length);
-        
+        console.log('Calling /api/medical-codes with', sessionId ? `sessionId ${sessionId}` : `text length: ${clinicalText.length}`);
+
         const response = await fetch(`${backendUrl}/api/medical-codes`, {
             method: 'POST',
             headers: {
@@ -8976,14 +9056,21 @@ async function fetchMedicalCodes(clinicalText, patientContext = null, encounterC
             },
             body: JSON.stringify(requestBody)
         });
-        
+
         console.log('API response status:', response.status);
-        
+
+        if (response.status === 404) {
+            const errData = await response.json().catch(() => ({}));
+            const empty = [];
+            if (errData.error === 'clinical_doc_not_ready') empty.notReady = true;
+            return empty;
+        }
+
         if (!response.ok) {
             console.error('API request failed with status:', response.status);
             return [];
         }
-        
+
         const data = await response.json();
         console.log('API response data:', data);
         
@@ -8993,6 +9080,11 @@ async function fetchMedicalCodes(clinicalText, patientContext = null, encounterC
                 ...c,
                 confidence: c.confidence != null ? c.confidence : 0.90
             }));
+            // Set when health-agent:GenerateMedicalCodes wasn't available and the
+            // backend fell back to Comprehend Medical + Bedrock (see server.py's
+            // _generate_medical_codes_fallback) -- surfaced in the sidebar so it's
+            // not mistaken for AWS's native gated feature.
+            codes.fallback = data.fallback || null;
             console.log('Medical codes fetched:', codes);
             return codes;
         } else {
@@ -9039,21 +9131,32 @@ function renderMedicalCodesSidebar(codes) {
     // Clear existing codes
     codeListContainer.innerHTML = '';
 
+    // health-agent:GenerateMedicalCodes wasn't available and the backend fell back
+    // to Comprehend Medical ICD-10 only (see server.py) -- disclose it, same as the
+    // "Rule-Based Summary" badge used elsewhere when a gated/AI feature falls back.
+    const fallbackBadgeHtml = (codes && codes.fallback) // nosemgrep: insecure-innerhtml — static literal, no user data
+        ? '<div class="code-fallback-badge" title="health-agent:GenerateMedicalCodes is unavailable on this account (gated preview) — these ICD-10 codes were derived from Amazon Comprehend Medical instead, and have not been reviewed by a coder.">AI-Suggested — Needs Clinician Review</div>'
+        : '';
+
     if (!codes || codes.length === 0) {
         codeListContainer.innerHTML = `
+            ${fallbackBadgeHtml}
             <div class="code-section-header">ICD-10 Diagnosis Codes</div>
             <div class="no-codes-message">No codes detected</div>
+            ${window.SHOW_CPT_CODES ? `
             <div class="code-section-header" style="margin-top:12px;">CPT Procedure Codes</div>
-            <div class="no-codes-message">No codes detected</div>
+            <div class="no-codes-message">No codes detected</div>` : ''}
         `;
         return;
     }
+    codeListContainer.insertAdjacentHTML('beforeend', fallbackBadgeHtml); // nosemgrep: insecure-innerhtml — static literal built above, no user data
 
     // Separate ICD10 and CPT codes
     const icdCodes = codes.filter(c => {
         const sys = (c.system || '').toUpperCase();
         return sys === 'ICD10' || sys === 'ICD-10' || (c.name && c.name.match(/^[A-Z]\d/));
     });
+    icdCodes.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
     const cptCodes = codes.filter(c => {
         const sys = (c.system || '').toUpperCase();
         return sys === 'CPT' || (c.name && c.name.match(/^\d{5}$/));
@@ -9084,27 +9187,20 @@ function renderMedicalCodesSidebar(codes) {
         noIcd.textContent = 'No diagnosis codes detected';
         codeListContainer.appendChild(noIcd);
     } else {
-        const { primary, low } = splitByConfidence(icdCodes);
-        primary.forEach(code => codeListContainer.appendChild(createCodeElement(code, true)));
-        if (low.length > 0) {
-            const otherSection = document.createElement('div');
-            otherSection.className = 'other-predictions-section';
-            // nosemgrep: insecure-innerhtml — static toggle UI with count, no user data
-            const _html5 = `
-                <div class="other-predictions-toggle" onclick="this.parentElement.classList.toggle('expanded')">
-                    <span>Other predictions (${low.length})</span>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,4 6,8 10,4"/></svg>
-                </div>
-                <div class="other-predictions-list"></div>
-            `;
-            otherSection.innerHTML = _html5; // nosemgrep: insecure-innerhtml, insecure-document-method
-            const listEl = otherSection.querySelector('.other-predictions-list');
-            low.forEach(code => listEl.appendChild(createCodeElement(code, false)));
-            codeListContainer.appendChild(otherSection);
-        }
+        // Single flat list -- no separate collapsed "Other predictions" bucket for
+        // ICD-10 (the backend already drops anything below
+        // COMPREHEND_MEDICAL_ICD10_MIN_SCORE, so everything that reaches here is
+        // above the confidence bar and belongs in the one "ICD-10 Diagnosis Codes"
+        // section). CPT below keeps its own primary/low split unchanged.
+        icdCodes.forEach(code => codeListContainer.appendChild(createCodeElement(code, true, false)));
     }
 
-    // Render CPT section
+    // Render CPT section — gated behind window.SHOW_CPT_CODES (frontend/js/config.js).
+    // health-agent:GenerateMedicalCodes is a gated preview feature and there's no
+    // CPT/E&M fallback (removed -- see backend/server.py), so this only ever shows
+    // real codes from a working GenerateMedicalCodes call. Left in place (not
+    // deleted) so it's a one-flag flip back on once gated access is granted.
+    if (window.SHOW_CPT_CODES) {
     const cptHeader = document.createElement('div');
     cptHeader.className = 'code-section-header';
     cptHeader.style.marginTop = '12px';
@@ -9136,11 +9232,12 @@ function renderMedicalCodesSidebar(codes) {
             codeListContainer.appendChild(otherSection);
         }
     }
+    } // end window.SHOW_CPT_CODES
 
-    console.log(`Rendered ${icdCodes.length} ICD-10 + ${cptCodes.length} CPT codes`);
+    console.log(`Rendered ${icdCodes.length} ICD-10 + ${window.SHOW_CPT_CODES ? cptCodes.length : 0} CPT codes`);
 }
 
-function createCodeElement(code, selected) {
+function createCodeElement(code, selected, showConfidence = true) {
     const codeElement = document.createElement('div');
     codeElement.className = 'code-item-sidebar' + (selected ? ' selected' : '');
     codeElement.setAttribute('data-code', code.name);
@@ -9170,7 +9267,7 @@ function createCodeElement(code, selected) {
                 <span class="code-checkbox-custom"></span>
             </label>
             <div class="code-badge-sidebar">${escapeHtml(code.name)}</div>
-            <div class="code-confidence ${confClass}">${confidencePercent}%</div>
+            ${showConfidence ? `<div class="code-confidence ${confClass}">${confidencePercent}%</div>` : ''}
         </div>
         <div class="code-description-sidebar">${escapeHtml(desc)}</div>
     `;
@@ -9201,13 +9298,51 @@ function toggleCodeSelection(checkbox, codeName) {
  * Generate medical codes from current SOAP notes and update sidebar
  * Called when SOAP notes are displayed or updated
  */
-async function generateAndDisplayMedicalCodes() {
+// DOM-free variant of generateAndDisplayMedicalCodes(), used during the
+// "Generating Clinical Notes" processing overlay (before the Clinical
+// Documentation page -- and its .code-list-sidebar/.soap-notes-main elements
+// -- exist). Fetches codes via the same backend sessionId mode and stores the
+// result for the SOAP-notes page to pick up, so it renders with codes already
+// in hand instead of showing its own separate loading state afterward.
+async function prefetchMedicalCodes(sessionId, attempt = 0) {
+    const patientContext = getCurrentPatientContext();
+    const codes = await fetchMedicalCodes(null, patientContext, {
+        encounterFormat: 'IN_PERSON'
+    }, sessionId);
+
+    if (codes && codes.notReady) {
+        const MAX_ATTEMPTS = 5;
+        if (attempt < MAX_ATTEMPTS) {
+            console.log(`[PrefetchCodes] clinical_doc_not_ready, retry ${attempt + 1}/${MAX_ATTEMPTS}...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return prefetchMedicalCodes(sessionId, attempt + 1);
+        }
+        console.warn('[PrefetchCodes] Gave up waiting for clinicalDoc.json to appear');
+        return null;
+    }
+
+    if (codes && codes.length > 0) {
+        processingS3Data = processingS3Data || {};
+        processingS3Data.medicalCodes = { medicalCodes: codes };
+        // Prevents generateAndDisplayMedicalCodes() from re-fetching if it's
+        // ever still reached (e.g. this prefetch came back empty/failed).
+        window.medicalCodesLoadedFromS3 = true;
+        console.log('[PrefetchCodes] Codes ready:', codes.length);
+        return codes;
+    }
+
+    console.log('[PrefetchCodes] No codes returned');
+    return null;
+}
+
+async function generateAndDisplayMedicalCodes(attempt = 0) {
     // Skip if codes were already loaded from S3
     if (window.medicalCodesLoadedFromS3) {
         console.log('[MedicalCodes] Skipping - codes already loaded from S3');
+        revealClinicalDocumentation();
         return;
     }
-    
+
     // Show loading state
     const codeListContainer = document.querySelector('.code-list-sidebar');
     if (codeListContainer) {
@@ -9218,42 +9353,86 @@ async function generateAndDisplayMedicalCodes() {
             </div>
         `;
     }
-    
-    // Extract SOAP note text
-    const clinicalText = extractSoapNoteText();
-    
-    if (!clinicalText) {
-        console.warn('No SOAP note text found');
-        renderMedicalCodesSidebar([]);
-        return;
+
+    // Prefer having the backend read+flatten clinicalDoc.json from S3 itself
+    // (sessionId mode) over scraping the rendered SOAP note back out of the
+    // DOM -- generation shouldn't depend on UI render state, only on whether
+    // the note actually exists yet. Only fall back to DOM extraction when no
+    // session id is available at all (shouldn't normally happen here, since
+    // this is only reached once pollForSoapNote() has confirmed the note
+    // exists, but kept as a safety net).
+    const sessionId = currentStreamingSessionId || null;
+    let clinicalText = null;
+    if (!sessionId) {
+        clinicalText = extractSoapNoteText();
+        if (!clinicalText) {
+            console.warn('No SOAP note text found');
+            renderMedicalCodesSidebar([]);
+            revealClinicalDocumentation();
+            return;
+        }
+        console.log('Extracted SOAP text length:', clinicalText.length);
+        console.log('SOAP text preview:', clinicalText.substring(0, 200) + '...');
     }
-    
-    console.log('Extracted SOAP text length:', clinicalText.length);
-    console.log('SOAP text preview:', clinicalText.substring(0, 200) + '...');
-    
+
     // Get current patient context if available
     const patientContext = getCurrentPatientContext();
     console.log('Patient context:', patientContext);
-    
+
     // Fetch codes from API
     const codes = await fetchMedicalCodes(clinicalText, patientContext, {
         encounterFormat: 'IN_PERSON'
-    });
-    
+    }, sessionId);
+
+    if (codes && codes.notReady) {
+        // clinicalDoc.json wasn't in S3 yet on the backend's own read -- a
+        // narrow race even after pollForSoapNote() confirmed it via /outputs,
+        // since that's a separate read. Retry briefly rather than treating
+        // this the same as "genuinely no codes found".
+        const MAX_ATTEMPTS = 5;
+        if (attempt < MAX_ATTEMPTS) {
+            console.log(`[MedicalCodes] clinical_doc_not_ready, retry ${attempt + 1}/${MAX_ATTEMPTS}...`);
+            setTimeout(() => generateAndDisplayMedicalCodes(attempt + 1), 2000);
+            return;
+        }
+        console.warn('[MedicalCodes] Gave up waiting for clinicalDoc.json to appear');
+        renderMedicalCodesSidebar([]);
+        sendCodesToIframe();
+        revealClinicalDocumentation();
+        return;
+    }
+
     console.log('API returned codes:', codes);
-    
+
     // If API returned empty or failed, show the hardcoded codes as fallback
     if (!codes || codes.length === 0) {
         console.log('No codes from API');
         renderMedicalCodesSidebar([]);
+        sendCodesToIframe();
+        revealClinicalDocumentation();
         return;
     }
-    
+
     // Render codes in sidebar
     renderMedicalCodesSidebar(codes);
-    
-    // Optionally link codes to text spans
-    linkCodesToText(codes);
+
+    // Keep the previsit-iframe's "Coding Insights" panel in sync -- without this
+    // it stays on whatever it was last sent (usually the empty-state placeholder
+    // sent right before this ran) even though .code-list-sidebar here updates
+    // correctly, since these are two independently-rendered surfaces.
+    if (streamingSessionOutputs) {
+        streamingSessionOutputs.medicalCodes = { medicalCodes: codes };
+    }
+    sendCodesToIframe();
+
+    // Insert <span class="code-linked-text" data-code="..."> around each code's
+    // evidence phrase in the SOAP note and wire up the click-to-highlight
+    // handlers -- linkCodesToText() below is a dead stub (just console.logs,
+    // never touches the DOM) and was leaving codes generated via this path
+    // with no working link to their source text.
+    linkEvidenceToSoapText({ medicalCodes: codes });
+    setTimeout(initCodeTextHandlers, 200);
+    revealClinicalDocumentation();
 }
 
 /**
@@ -9278,7 +9457,8 @@ function getCurrentPatientContext() {
     if (ageMatch) {
         // Estimate birth year from age
         const age = parseInt(ageMatch[1]);
-        const birthYear = new Date().getFullYear() - age;
+        const currentYear = window.getZonedNow ? window.getZonedNow(window.APP_TIMEZONE).year : new Date().getFullYear();
+        const birthYear = currentYear - age;
         context.dateOfBirth = `${birthYear}-01-01`;
     }
     
@@ -10150,13 +10330,14 @@ function updateFollowUpAfterSMS() {
  * Populate Patient Visit Summary date and visit type
  */
 function populatePatientSummaryMeta() {
+    updateAvsIds();
     const dateEl = document.getElementById('patientSummaryDate');
     const visitTypeEl = document.getElementById('patientSummaryVisitType');
     
     // Set current date
     if (dateEl) {
         const today = new Date();
-        const options = { year: 'numeric', month: 'long', day: '2-digit' };
+        const options = { year: 'numeric', month: 'long', day: '2-digit', timeZone: window.APP_TIMEZONE };
         dateEl.textContent = today.toLocaleDateString('en-US', options);
     }
     

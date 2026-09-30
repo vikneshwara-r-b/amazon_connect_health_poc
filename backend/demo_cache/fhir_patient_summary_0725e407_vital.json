@@ -1,0 +1,64 @@
+{
+  "success": true,
+  "section": "vitals",
+  "patientId": "0725e4075c0a604253ba23c24746cc8dea085e10cc6e9a51c309619a1d65137a",
+  "count": 5,
+  "totalAvailable": 5,
+  "results": [
+    {
+      "id": "",
+      "name": "Systolic blood pressure",
+      "code": "8480-6",
+      "codeSystem": "http://loinc.org",
+      "value": 145,
+      "unit": "mmHg",
+      "category": "vital-signs",
+      "date": "2025-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Body weight",
+      "code": "29463-7",
+      "codeSystem": "http://loinc.org",
+      "value": 299.8,
+      "unit": "lbs",
+      "category": "vital-signs",
+      "date": "2025-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Systolic blood pressure",
+      "code": "8480-6",
+      "codeSystem": "http://loinc.org",
+      "value": 139,
+      "unit": "mmHg",
+      "category": "vital-signs",
+      "date": "2024-07-20",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Body weight",
+      "code": "29463-7",
+      "codeSystem": "http://loinc.org",
+      "value": 297,
+      "unit": "lbs",
+      "category": "vital-signs",
+      "date": "2024-07-20",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Systolic blood pressure",
+      "code": "8480-6",
+      "codeSystem": "http://loinc.org",
+      "value": 151,
+      "unit": "mmHg",
+      "category": "vital-signs",
+      "date": "2024-01-13",
+      "status": "final"
+    }
+  ]
+}

@@ -204,6 +204,10 @@ def require_auth(f):
         token = request.headers.get("Authorization", "")
         payload, error = validate_token(token)
         if error:
+            # Logged so a 401 is diagnosable from CloudWatch alone -- the werkzeug
+            # access log line only shows "401", never *why* (expired vs bad
+            # signature vs missing header entirely).
+            print(f"[AUTH] 401 on {request.path}: {error}")
             return jsonify({"error": "Unauthorized", "message": error}), 401
 
         # Attach user info to request for downstream use
@@ -245,6 +249,10 @@ def init_auth(app):
         token = request.headers.get("Authorization", "")
         payload, error = validate_token(token)
         if error:
+            # Logged so a 401 is diagnosable from CloudWatch alone -- the werkzeug
+            # access log line only shows "401", never *why* (expired vs bad
+            # signature vs missing header entirely).
+            print(f"[AUTH] 401 on {request.path}: {error}")
             return jsonify({"error": "Unauthorized", "message": error}), 401
 
         request.cognito_user = payload

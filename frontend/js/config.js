@@ -87,6 +87,63 @@
         officeNumber: '(555) 123-4567'        // front desk / office line
     };
 
+    // ==========================================================================
+    // CLINIC TIMEZONE
+    // ==========================================================================
+    // IANA timezone name the clinic operates in. Drives the schedule screen's
+    // appointment-slot times and "today" date header — without this, those would
+    // silently follow whatever timezone the viewer's own browser/OS happens to be
+    // set to, which is wrong for a clinic scheduling display (a patient viewing
+    // from another timezone would see appointment times shifted to their own clock).
+    // Change this to your clinic's actual timezone.
+    window.APP_TIMEZONE = 'America/Lima';
+
+    // Returns the current date/time as plain numeric parts (year, month 1-12, day,
+    // hour 0-23, minute, second), evaluated in `timeZone` (defaults to APP_TIMEZONE)
+    // rather than the browser's local timezone. Use this instead of `new Date()` +
+    // getHours()/getDate() etc. wherever a wall-clock value needs to reflect the
+    // clinic's timezone, not the viewer's.
+    window.getZonedNow = function(timeZone) {
+        const tz = timeZone || window.APP_TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: tz,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+        }).formatToParts(new Date());
+        const get = (type) => parseInt(parts.find(p => p.type === type).value, 10);
+        let hour = get('hour');
+        if (hour === 24) hour = 0; // some locales render midnight as "24" with hour12:false
+        return {
+            year: get('year'),
+            month: get('month'), // 1-12
+            day: get('day'),
+            hour: hour,
+            minute: get('minute'),
+            second: get('second')
+        };
+    };
+
+    // ==========================================================================
+    // MEDICAL CODES DISPLAY
+    // ==========================================================================
+    // health-agent:GenerateMedicalCodes is a gated preview feature (see CLAUDE.md);
+    // without it, this app has no CPT/E&M fallback at all (removed -- see
+    // backend/server.py's module comment), so CPT only ever shows real codes from
+    // a working GenerateMedicalCodes call. Set to false to hide the "CPT Procedure
+    // Codes" section entirely until gated access is granted -- ICD-10 is
+    // unaffected either way. Deploy-time only (redeploy AmazonConnectHealthFrontend
+    // to apply); see `-c showCptCodes=` in README.md.
+    window.SHOW_CPT_CODES = true;
+
+    // Mirrors backend's MEDICAL_CODES_PROVIDER (see cdk.json's `medicalCodesProvider`
+    // / backend/config.py). When it's 'comprehend-medical', AWS's native
+    // GenerateMedicalCodes is never called server-side, so polling
+    // GET /streaming/session/<id>/medical-codes for a medicalCodes.json that will
+    // never be written is pure wasted wait -- main.js's pollForMedicalCodes() checks
+    // this and skips straight to the direct POST /api/medical-codes call instead.
+    window.MEDICAL_CODES_PROVIDER = 'auto';
+
     // Environment configurations
     // Update the 'deployed' block with your CloudFront distribution URLs after deployment.
     const configs = {

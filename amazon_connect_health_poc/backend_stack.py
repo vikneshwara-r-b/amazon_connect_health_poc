@@ -11,6 +11,7 @@ from aws_cdk import (
     aws_iam as iam,
     aws_logs as logs,
     aws_s3 as s3,
+    aws_ssm as ssm,
 )
 from constructs import Construct
 
@@ -34,19 +35,35 @@ class BackendStack(Stack):
         *,
         vpc: ec2.IVpc,
         environment: str = "dev",
-        healthlake_datastore_id: str,
-        domain_id: str,
         # No "runtime." prefix -- botocore adds it automatically via a hostPrefix
         # trait on StartPatientInsightsJob/GetPatientInsightsJob; including it here
         # too doubles it and breaks DNS resolution (see backend/config.py).
         service_endpoint: str = "https://health-agent.us-east-1.api.aws",
         cors_origin: str = "*",
+        # Feature flag: which provider POST /api/medical-codes uses -- "auto"
+        # (try GenerateMedicalCodes, fall back to Comprehend Medical ICD-10 only),
+        # "connect-health" (GenerateMedicalCodes only, no fallback), or
+        # "comprehend-medical" (skip GenerateMedicalCodes entirely). See
+        # backend/config.py and CLAUDE.md.
+        medical_codes_provider: str = "auto",
         user_pool: cognito.IUserPool | None = None,
         user_pool_client: cognito.IUserPoolClient | None = None,
         use_cloudfront: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Read from SSM (published by ConnectHealthResourcesStack) rather than a
+        # direct CDK cross-stack reference -- see that stack's docstring: a direct
+        # reference becomes a CloudFormation export that blocks destroying it on
+        # its own, which matters because it holds the (costly, disposable)
+        # HealthLake datastore.
+        healthlake_datastore_id = ssm.StringParameter.value_for_string_parameter(
+            self, f"/connect-health/{environment}/healthlakeDatastoreId"
+        )
+        domain_id = ssm.StringParameter.value_for_string_parameter(
+            self, f"/connect-health/{environment}/domainId"
+        )
 
         # Output bucket for Patient Insights + streaming output. The source template
         # can optionally accept an existing bucket name; a from-scratch CDK app has no
@@ -92,6 +109,12 @@ class BackendStack(Stack):
                     "healthlake:SearchWithPost",
                     "healthlake:SearchEverything",
                     "healthlake:GetCapabilities",
+                    # Write access for Encounter (session start) and DocumentReference
+                    # (approved SOAP notes) — HealthLake has no finer-grained ARN scoping
+                    # than the datastore itself, so this can't be limited to those two
+                    # resource types.
+                    "healthlake:CreateResource",
+                    "healthlake:UpdateResource",
                 ],
                 resources=[
                     f"arn:aws:healthlake:{self.region}:{self.account}:datastore/fhir/{healthlake_datastore_id}"
@@ -124,6 +147,20 @@ class BackendStack(Stack):
                     "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
                     f"arn:aws:bedrock:us-east-1:{self.account}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0",
                 ],
+            )
+        )
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                # Fallback for medical coding when health-agent:GenerateMedicalCodes
+                # is unavailable (gated preview) -- see backend/server.py's
+                # _generate_medical_codes_fallback(). Comprehend Medical has no
+                # resource-level ARN scoping at all (confirmed: no resource type in
+                # its IAM reference), so these are necessarily account/region-wide.
+                actions=[
+                    "comprehendmedical:DetectEntitiesV2",
+                    "comprehendmedical:InferICD10CM",
+                ],
+                resources=["*"],
             )
         )
 
@@ -220,6 +257,7 @@ class BackendStack(Stack):
                     if user_pool_client
                     else "",
                     "CORS_ORIGINS": cors_origin,
+                    "MEDICAL_CODES_PROVIDER": medical_codes_provider,
                 },
             ),
         )

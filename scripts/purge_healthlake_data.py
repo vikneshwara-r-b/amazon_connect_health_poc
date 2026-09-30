@@ -21,7 +21,8 @@ from botocore.awsrequest import AWSRequest
 
 # Order matters: resources that reference a Patient must be deleted before
 # the Patient itself, or HealthLake will reject the Patient delete.
-RESOURCE_TYPES = ["MedicationRequest", "Encounter", "Observation", "Condition", "Patient"]
+# DocumentReference (SOAP notes / AVS saved by the app) references Encounter, so it goes first.
+RESOURCE_TYPES = ["DocumentReference", "MedicationRequest", "Encounter", "Observation", "Condition", "Patient"]
 
 
 def signed_request(method, url, credentials, region):

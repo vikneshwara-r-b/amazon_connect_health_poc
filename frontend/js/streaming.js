@@ -67,7 +67,29 @@ const ConnectHealthStreaming = (function() {
             
             // Generate session ID
             sessionId = crypto.randomUUID();
-            
+
+            // Link this session to the patient via a HealthLake Encounter, created
+            // before we start streaming — sessions otherwise have no durable link to
+            // a patient. Non-fatal: a failed/slow write must not block the consultation.
+            window.currentEncounterId = null;
+            try {
+                const backendUrl = window.BACKEND_URL || 'http://localhost:5000';
+                const resp = await fetch(`${backendUrl}/api/streaming/session/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ patientId: window.currentPatientId, sessionId })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    window.currentEncounterId = data.encounterId;
+                    console.log('[Streaming] Encounter created:', data.encounterId);
+                } else {
+                    console.warn('[Streaming] Encounter creation failed, continuing without it:', data.error);
+                }
+            } catch (encounterError) {
+                console.warn('[Streaming] Encounter creation request failed, continuing without it:', encounterError);
+            }
+
             // Send start command
             ws.send(JSON.stringify({ type: 'start', sessionId }));
             console.log('[Streaming] Sent start command:', sessionId);
@@ -200,19 +222,27 @@ const ConnectHealthStreaming = (function() {
             processor = audioContext.createScriptProcessor(4096, 1, 1);
             
             processor.onaudioprocess = (e) => {
-                if (!isStreaming || isPaused || !ws || ws.readyState !== WebSocket.OPEN) {
+                if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) {
                     return;
                 }
-                
+
                 const inputData = e.inputBuffer.getChannelData(0);
-                
+
                 // Convert float32 to int16 PCM
                 const pcmData = new Int16Array(inputData.length);
-                for (let i = 0; i < inputData.length; i++) {
-                    const s = Math.max(-1, Math.min(1, inputData[i]));
-                    pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                if (isPaused) {
+                    // Connect Health's streaming API has no "pause" concept -- it expects a
+                    // continuous audio stream and times out the session if chunks stop
+                    // arriving. Send silence instead of nothing so the stream stays alive;
+                    // silence produces no transcript content, so it doesn't affect the SOAP
+                    // note (pcmData is already zero-initialized).
+                } else {
+                    for (let i = 0; i < inputData.length; i++) {
+                        const s = Math.max(-1, Math.min(1, inputData[i]));
+                        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
                 }
-                
+
                 // Send as binary
                 ws.send(pcmData.buffer);
             };

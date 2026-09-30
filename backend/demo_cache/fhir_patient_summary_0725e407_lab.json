@@ -1,0 +1,174 @@
+{
+  "success": true,
+  "section": "labs",
+  "patientId": "0725e4075c0a604253ba23c24746cc8dea085e10cc6e9a51c309619a1d65137a",
+  "count": 15,
+  "totalAvailable": 15,
+  "results": [
+    {
+      "id": "",
+      "name": "Hemoglobin",
+      "code": "718-7",
+      "codeSystem": "http://loinc.org",
+      "value": 15.4,
+      "unit": "g/dL",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Hematocrit",
+      "code": "4544-3",
+      "codeSystem": "http://loinc.org",
+      "value": 47.4,
+      "unit": "%",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Glucose",
+      "code": "2345-7",
+      "codeSystem": "http://loinc.org",
+      "value": 120,
+      "unit": "mg/dL",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Creatinine",
+      "code": "2160-0",
+      "codeSystem": "http://loinc.org",
+      "value": 0.84,
+      "unit": "mg/dL",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Estimated GFR",
+      "code": "62238-1",
+      "codeSystem": "http://loinc.org",
+      "value": 82,
+      "unit": "mL/min/1.73m2",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "ALT",
+      "code": "1742-6",
+      "codeSystem": "http://loinc.org",
+      "value": 25,
+      "unit": "U/L",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "AST",
+      "code": "1920-8",
+      "codeSystem": "http://loinc.org",
+      "value": 20,
+      "unit": "U/L",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Chloride",
+      "code": "2075-0",
+      "codeSystem": "http://loinc.org",
+      "value": 112,
+      "unit": "mmol/L",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "CO2 total",
+      "code": "2028-9",
+      "codeSystem": "http://loinc.org",
+      "value": 19,
+      "unit": "mmol/L",
+      "category": "laboratory",
+      "date": "2025-07-19",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Total Cholesterol",
+      "code": "2093-3",
+      "codeSystem": "http://loinc.org",
+      "value": 174,
+      "unit": "mg/dL",
+      "category": "laboratory",
+      "date": "2024-10-11",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "LDL Cholesterol (calculated)",
+      "code": "13457-7",
+      "codeSystem": "http://loinc.org",
+      "value": 90,
+      "unit": "mg/dL",
+      "category": "laboratory",
+      "date": "2024-10-11",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "HDL Cholesterol",
+      "code": "2085-9",
+      "codeSystem": "http://loinc.org",
+      "value": 53,
+      "unit": "mg/dL",
+      "category": "laboratory",
+      "date": "2024-10-11",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Triglycerides",
+      "code": "2571-8",
+      "codeSystem": "http://loinc.org",
+      "value": 185,
+      "unit": "mg/dL",
+      "category": "laboratory",
+      "date": "2024-10-11",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "TSH",
+      "code": "3016-3",
+      "codeSystem": "http://loinc.org",
+      "value": 1.373,
+      "unit": "uIU/mL",
+      "category": "laboratory",
+      "date": "2024-10-11",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Vitamin D, 25-hydroxy total",
+      "code": "62292-8",
+      "codeSystem": "http://loinc.org",
+      "value": 33.3,
+      "unit": "ng/mL",
+      "category": "laboratory",
+      "date": "2024-10-11",
+      "status": "final"
+    }
+  ]
+}

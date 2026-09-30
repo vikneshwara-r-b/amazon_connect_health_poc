@@ -226,64 +226,11 @@
             opacity: 0;
         }
 
-        /* Since Last Visit — block cards from Bedrock output */
-        .since-block-cards {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-top: 8px;
-        }
-        .since-block-card {
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 14px 16px;
-            transition: box-shadow 0.2s;
-        }
-        .since-block-card:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        .since-block-header {
-            font-weight: 600;
-            font-size: 13.5px;
-            color: #1f2937;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .since-block-category {
-            font-weight: 600;
-        }
-
-        .since-block-date {
-            font-weight: 400;
-            color: #9ca3af;
-            font-size: 13px;
-        }
-        .since-block-item {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 4px;
-            font-size: 13px;
-            color: #4b5563;
-            line-height: 1.55;
-        }
-        .since-block-item .bullet {
-            color: #9ca3af;
-            flex-shrink: 0;
-            margin-top: 1px;
-            font-size: 10px;
-        }
-
-        /* Evidence text in Since Last Visit and Visit Priorities — no visual cue, evidence shown inline */
-        .since-block-item .evidence-linked-text,
+        /* Evidence text in Visit Priorities — no visual cue, evidence shown inline */
         .priority-item .evidence-linked-text {
             cursor: default;
             background: none;
         }
-        .since-block-item .evidence-linked-text:hover,
         .priority-item .evidence-linked-text:hover {
             background: none;
         }
@@ -349,11 +296,6 @@
             color: #9ca3af;
             font-size: 12px;
         }
-        .since-block-empty {
-            font-size: 13px;
-            color: #8896a4;
-            padding: 8px 0;
-        }
 
         .metric-info {
             flex: 1;
@@ -407,6 +349,81 @@
         }
 
         /* Priority Items */
+        /* --- Supporting evidence: source not linked to an EHR record --- */
+        .evidence-unlinked {
+            border-left: 3px solid #f59e0b;
+            background: #fffbeb;
+            border-radius: 6px;
+            padding: 6px 8px;
+            margin-top: 6px;
+        }
+        .evidence-unlinked-badge {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #b45309;
+            background: #fef3c7;
+        }
+        .evidence-coverage { margin-left: 8px; font-size: 11px; font-weight: 500; color: #64748b; }
+        .evidence-coverage.partial { color: #b45309; }
+
+        /* --- Custom Visit Priorities (clinician-authored, saved per patient in this browser) --- */
+        .custom-priorities-note {
+            margin-left: 8px;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: 0;
+            color: #9ca3af;
+        }
+        .priority-item.custom { cursor: default; }
+        .priority-item.custom::before { background: #0ea5e9; opacity: 0.7; }
+        .priority-item.custom .priority-content { flex: 1; min-width: 0; }
+        .custom-priority-tag {
+            display: inline-block; margin-top: 6px; padding: 1px 6px; border-radius: 4px;
+            font-size: 10px; font-weight: 600; background: #e0f2fe; color: #0369a1;
+        }
+        .custom-priority-actions { display: flex; gap: 4px; align-self: flex-start; }
+        .custom-priority-actions button,
+        .custom-priority-add {
+            border: none; background: transparent; cursor: pointer; font-size: 12px; font-weight: 600;
+            color: #7c3aed; padding: 4px 6px; border-radius: 6px;
+        }
+        .custom-priority-actions button:hover,
+        .custom-priority-add:hover { background: #f5f3ff; }
+        .custom-priority-actions .custom-priority-delete { color: #dc2626; }
+        .custom-priority-actions .custom-priority-delete:hover { background: #fef2f2; }
+        .custom-priority-add { margin-top: 8px; padding: 6px 4px; }
+        .custom-priorities-empty { font-size: 13px; color: #9ca3af; padding: 4px 2px; }
+        .priority-item.custom.editing [contenteditable="true"] {
+            outline: 1px dashed #7dd3fc; outline-offset: 2px; border-radius: 4px;
+            background: #f0f9ff; cursor: text; min-height: 1.2em;
+        }
+        .priority-item.custom.editing [contenteditable="true"]:focus { outline: 2px solid #0ea5e9; background: #fff; }
+        .priority-item.custom.editing [contenteditable="true"]:empty::before {
+            content: attr(data-placeholder); color: #9ca3af;
+        }
+
+        /* --- Patient Story: text whose evidence has no matching EHR source record --- */
+        .evidence-linked-text.evidence-unsourced {
+            background: rgba(245, 158, 11, 0.16);
+            border-bottom: 2px solid #f59e0b;
+            border-radius: 2px;
+        }
+        .evidence-linked-text.evidence-unsourced:hover {
+            background: rgba(245, 158, 11, 0.28);
+        }
+        .evidence-legend {
+            display: flex; align-items: center; gap: 6px; margin-top: 10px;
+            font-size: 11px; color: #92400e;
+        }
+        .evidence-legend-swatch {
+            display: inline-block; width: 22px; height: 10px; border-radius: 2px;
+            background: rgba(245, 158, 11, 0.16); border-bottom: 2px solid #f59e0b;
+        }
+
         .priority-list {
             display: flex;
             flex-direction: column;
@@ -517,6 +534,12 @@
         .priority-badge.guideline {
             background: rgba(59, 130, 246, 0.1);
             color: #2563eb;
+        }
+
+        .priority-badge.fallback {
+            background: rgba(245, 158, 11, 0.12);
+            color: #b45309;
+            margin-left: 8px;
         }
 
         /* Recommendation List */
@@ -916,7 +939,7 @@
         <!-- Patient Header -->
         <div class="patient-header-compact">
             <span class="patient-name-large" id="patientNameHeader">Diabetic follow-up</span>
-            <span class="visit-time">Today 9:00 AM</span>
+            <span class="visit-time" id="visitTimeHeader">Today 9:00 AM</span>
         </div>
 
         <!-- SITUATION Card -->
@@ -927,6 +950,7 @@
                     <polyline points="12,6 12,12 16,14"/>
                 </svg>
                 <span class="visit-title">Patient Story</span>
+                <span class="priority-badge fallback" id="patientStoryFallbackBadge" style="display:none;" title="Bedrock AI synthesis is unavailable — this is a rule-based summary generated from raw visit data">Rule-Based Summary</span>
             </div>
             <div class="visit-card-body">
                 <div class="visit-summary" id="situationSummary">
@@ -936,9 +960,8 @@
                     </div>
                 </div>
 
-                <div class="subsection-header" id="sinceLastVisitHeader" style="display:none;">Since last visit</div>
-                <div class="since-block-cards" id="sinceLastVisitBlocks" style="display:none;">
-                </div>
+                <div class="evidence-legend" id="evidenceLegend" style="display:none;"><span class="evidence-legend-swatch"></span>Amber text: no matching EHR source record found</div>
+
             </div>
         </div>
 
@@ -951,6 +974,7 @@
                     <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
                 </svg>
                 <span class="visit-title">Visit Priorities</span>
+                <span class="priority-badge fallback" id="visitPrioritiesFallbackBadge" style="display:none;" title="Bedrock AI synthesis is unavailable — these are rule-based priorities matched from raw visit data">Rule-Based Summary</span>
             </div>
             <div class="visit-card-body" id="assessmentBody">
                 <div class="subsection-header" id="mustAddressHeader" style="display:none;">TODAY'S VISIT - MUST ADDRESS</div>
@@ -960,6 +984,10 @@
                 <div class="subsection-header" id="ongoingHeader" style="display:none;">ONGOING MANAGEMENT - DISCUSS & ADJUST</div>
                 <div class="priority-list" id="priorityListOngoing">
                 </div>
+
+                <div class="subsection-header" id="customPrioritiesHeader">Custom visit priorities<span class="custom-priorities-note">Added by you &middot; saved in this browser only</span></div>
+                <div class="priority-list" id="customPriorityList"></div>
+                <button type="button" class="custom-priority-add" id="customPriorityAddBtn">+ Add custom priority</button>
             </div>
         </div>
 
@@ -1102,8 +1130,9 @@
                     <div style="padding:10px 14px;">
                         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;padding:6px 0 4px;border-bottom:1px solid #f1f5f9;">ICD-10 Diagnosis Codes</div>
                         <div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No diagnosis codes detected</div>
+                        ${window.SHOW_CPT_CODES ? `
                         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;padding:10px 0 4px;margin-top:8px;border-bottom:1px solid #f1f5f9;">CPT Procedure Codes</div>
-                        <div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No procedure codes detected</div>
+                        <div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No procedure codes detected</div>` : ''}
                     </div>`;
                 panel.style.display = 'block';
                 return;
@@ -1140,18 +1169,8 @@
             const colors = { ICD10: '#8b5cf6', CPT: '#10b981' };
             let html = '<div style="padding:14px 18px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span style="font-size:14px;font-weight:600;color:#1e293b;">Medical Codes</span></div>';
             html += '<div style="padding:10px 14px;">';
-            
-            // Split into primary (>=60%) and low confidence (<60%)
-            const primaryCodes = codes.filter(c => {
-                const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence) / 100;
-                return conf >= 0.60;
-            });
-            const lowConfCodes = codes.filter(c => {
-                const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence) / 100;
-                return conf < 0.60;
-            });
 
-            function renderCodeItem(code, checked) {
+            function renderCodeItem(code, checked, showConfidence = true) {
                 const color = colors[code.system] || '#6366f1';
                 const confidenceRaw = typeof code.confidence === 'number' ? code.confidence : parseFloat(code.confidence) / 100;
                 const confidence = Math.round(confidenceRaw * 100);
@@ -1168,13 +1187,14 @@
                     <span style="display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;color:white;background:${color};white-space:nowrap;flex-shrink:0;margin-top:2px;" onclick="onCodeClicked('${code.name}')">${code.name}</span>
                     <div style="flex:1;" onclick="onCodeClicked('${code.name}')">
                         <div style="font-size:13px;color:#374151;line-height:1.4;">${code.description || ''}</div>
-                        ${confidence ? `<div style="font-size:11px;color:${confColor};font-weight:600;margin-top:2px;">${confidence}%</div>` : ''}
+                        ${(showConfidence && confidence) ? `<div style="font-size:11px;color:${confColor};font-weight:600;margin-top:2px;">${confidence}%</div>` : ''}
                     </div>
                 </div>`; 
             }
 
             // Separate ICD10 and CPT
             const icdCodes = codes.filter(c => { const s = (c.system||'').toUpperCase(); return s === 'ICD10' || s === 'ICD-10' || (c.name && c.name.match(/^[A-Z]\d/)); });
+            icdCodes.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
             const cptCodes = codes.filter(c => { const s = (c.system||'').toUpperCase(); return s === 'CPT' || (c.name && c.name.match(/^\d{5}$/)); });
 
             // ICD-10 section
@@ -1182,17 +1202,19 @@
             if (icdCodes.length === 0) {
                 html += '<div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No diagnosis codes detected</div>';
             } else {
-                const icdPrimary = icdCodes.filter(c => { const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence)/100; return conf >= 0.60; });
-                const icdLow = icdCodes.filter(c => { const conf = typeof c.confidence === 'number' ? c.confidence : parseFloat(c.confidence)/100; return conf < 0.60; });
-                icdPrimary.forEach(code => { html += renderCodeItem(code, true); });
-                if (icdLow.length > 0) {
-                    html += `<div style="margin-top:6px;"><div onclick="var l=this.nextElementSibling;l.style.display=l.style.display==='none'?'block':'none';" style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;cursor:pointer;border-radius:6px;background:#f8fafc;font-size:12px;font-weight:600;color:#64748b;"><span>Other ICD-10 (${icdLow.length})</span><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,4 6,8 10,4"/></svg></div><div style="display:none;">`;
-                    icdLow.forEach(code => { html += renderCodeItem(code, false); });
-                    html += '</div></div>';
-                }
+                // Single flat list -- no separate collapsed "Other ICD-10" bucket.
+                // The backend already drops anything below
+                // COMPREHEND_MEDICAL_ICD10_MIN_SCORE (see backend/config.py), so
+                // everything that reaches here belongs in the one section.
+                icdCodes.forEach(code => { html += renderCodeItem(code, true, false); });
             }
 
-            // CPT section
+            // CPT section — gated behind window.SHOW_CPT_CODES (frontend/js/config.js).
+            // health-agent:GenerateMedicalCodes is a gated preview feature and there's no
+            // CPT/E&M fallback (removed -- see backend/server.py), so this only ever
+            // shows real codes from a working GenerateMedicalCodes call. Left in place
+            // (not deleted) so it's a one-flag flip back on once gated access is granted.
+            if (window.SHOW_CPT_CODES) {
             html += '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;padding:10px 0 4px;margin-top:8px;border-bottom:1px solid #f1f5f9;">CPT Procedure Codes</div>';
             if (cptCodes.length === 0) {
                 html += '<div style="padding:10px 0;text-align:center;color:#9ca3af;font-size:13px;">No procedure codes detected</div>';
@@ -1206,7 +1228,8 @@
                     html += '</div></div>';
                 }
             }
-            
+            } // end window.SHOW_CPT_CODES
+
             html += '</div>';
             panel.innerHTML = html;
             panel.style.display = 'block';
@@ -1271,6 +1294,7 @@
         
         function renderPreVisitData(data) {
             const patient = data.patient;
+            initCustomPriorities(patient && patient.id);
             
             // Clear all previous patient content immediately on any new data
             if (data.loading && data.attempt <= 1) {
@@ -1281,6 +1305,10 @@
             const patientNameEl = document.getElementById('patientNameHeader');
             if (patientNameEl && patient) {
                 patientNameEl.textContent = patient.name + ' - Follow-up Visit';
+            }
+            const visitTimeEl = document.getElementById('visitTimeHeader');
+            if (visitTimeEl && patient && patient.appointmentTime) {
+                visitTimeEl.textContent = 'Today ' + patient.appointmentTime;
             }
             
             // Update situation summary
@@ -1337,25 +1365,30 @@
                 const allSectionTexts = {};
                 let overviewNarrative = '';
                 let overviewEvidenceMap = {};
-                
+                let overviewItemMap = {};
+
                 sections.forEach(section => {
                     const sectionName = (section.SectionName || '').trim();
                     const clinicalNarrative = section.ClinicalNarrative || [];
                     const narrativeText = clinicalNarrative.map(n => n.Text).join('');
-                    
+
                     // Collect ALL narrative items with evidence from ALL sections
                     clinicalNarrative.forEach(item => {
                         if (item.Evidence && item.Evidence.length > 0) {
                             allClinicalNarrative.push(item);
                         }
                     });
-                    
+
                     if (sectionName.includes('PATIENT_AND_ENCOUNTER_OVERVIEW')) {
                         overviewNarrative = narrativeText;
                         overviewEvidenceMap = extractEvidenceFromNarrative(clinicalNarrative);
+                        // Preserve each ClinicalNarrative entry as its own discrete item, keyed by
+                        // subsection (## header). Real API responses don't use "*" bullets like the
+                        // cached demo data does, so items must be split on their natural array
+                        // boundaries rather than a literal bullet character.
+                        overviewItemMap = buildOverviewItemMap(clinicalNarrative);
                     } else if (sectionName.includes('SINCE_LAST_VISIT')) {
                         allSectionTexts.sinceLastVisit = narrativeText;
-                        updateSinceLastVisit(narrativeText);
                     } else if (sectionName.includes('TRENDS')) {
                         allSectionTexts.trends = narrativeText;
                         updateTrends(narrativeText);
@@ -1368,7 +1401,7 @@
                 
                 // Now call parseAndDisplayOverview with ALL evidence items collected
                 if (overviewNarrative) {
-                    parseAndDisplayOverview(overviewNarrative, patient, overviewEvidenceMap, allClinicalNarrative, allSectionTexts);
+                    parseAndDisplayOverview(overviewNarrative, patient, overviewEvidenceMap, allClinicalNarrative, allSectionTexts, overviewItemMap);
                 }
                 
                 showNotification('Pre-visit insights loaded for ' + (patient ? patient.name : 'patient'));
@@ -1403,19 +1436,40 @@
             if (conditionBadges) conditionBadges.innerHTML = '<span class="condition-badge">Loading...</span>';
             if (medicationBadges) medicationBadges.innerHTML = '<span class="med-badge">Loading...</span>';
             
-            // Hide Since Last Visit until content loads
-            const sinceLastVisitHeader = document.getElementById('sinceLastVisitHeader');
-            const sinceBlocks = document.getElementById('sinceLastVisitBlocks');
-            if (sinceLastVisitHeader) { sinceLastVisitHeader.style.display = 'none'; sinceLastVisitHeader.textContent = 'Since last visit'; }
-            if (sinceBlocks) { sinceBlocks.style.display = 'none'; sinceBlocks.innerHTML = ''; }
-            
             // Clear Patient Story
             const situationSummary = document.getElementById('situationSummary');
             if (situationSummary) situationSummary.innerHTML = '';
+
+            // Reset the "Rule-Based Summary" fallback badges — the new patient's synthesis
+            // path (success or fallback) decides below whether to show them again.
+            const patientStoryFallbackBadge = document.getElementById('patientStoryFallbackBadge');
+            const visitPrioritiesFallbackBadge = document.getElementById('visitPrioritiesFallbackBadge');
+            if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = 'none';
+            if (visitPrioritiesFallbackBadge) visitPrioritiesFallbackBadge.style.display = 'none';
         }
         
+        // Group a section's raw ClinicalNarrative entries by their "## Header" subsection,
+        // preserving each entry as its own discrete item (no bullet character required).
+        function buildOverviewItemMap(clinicalNarrative) {
+            const map = {};
+            let current = 'overview';
+            (clinicalNarrative || []).forEach(item => {
+                const text = item.Text || '';
+                const trimmed = text.trim();
+                if (!trimmed) return;
+                if (trimmed.startsWith('## ')) {
+                    current = trimmed.replace(/^##\s*/, '').toLowerCase();
+                    if (!map[current]) map[current] = [];
+                    return;
+                }
+                if (!map[current]) map[current] = [];
+                map[current].push(text.trim());
+            });
+            return map;
+        }
+
         // Parse the PATIENT_AND_ENCOUNTER_OVERVIEW section and distribute to cards
-        function parseAndDisplayOverview(narrative, patient, evidenceMap = {}, clinicalNarrative = [], extraSections = {}) {
+        function parseAndDisplayOverview(narrative, patient, evidenceMap = {}, clinicalNarrative = [], extraSections = {}, itemMap = {}) {
             // Split by markdown headers (## Header)
             const sections = {};
             let currentSection = 'overview';
@@ -1453,47 +1507,31 @@
                 // NOTE: narrative is now generated by synthesizePrevisitContent() unified call
             }
             
-            // Extract and update "Since last visit" date from overview
-            const overviewText = sections['overview'] || '';
-            const lastVisitMatch = overviewText.match(/last visit was on\s*(\d{2}\/\d{2}\/\d{4})/i);
-            const sinceLastVisitHeader = document.getElementById('sinceLastVisitHeader');
-            if (sinceLastVisitHeader) {
-                if (lastVisitMatch) {
-                    // Format date nicely (MM/DD/YYYY -> Month YYYY)
-                    const dateParts = lastVisitMatch[1].split('/');
-                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                                   'July', 'August', 'September', 'October', 'November', 'December'];
-                    const monthName = months[parseInt(dateParts[0]) - 1] || dateParts[0];
-                    const year = dateParts[2];
-                    sinceLastVisitHeader.textContent = `Since last visit (${monthName} ${year})`;
-                } else {
-                    sinceLastVisitHeader.textContent = 'Since last visit';
-                }
-            }
-            
             // Update BACKGROUND card - Conditions
             const conditionBadges = document.getElementById('conditionBadges');
             if (conditionBadges) {
                 const conditions = sections['chronic and active conditions'] || '';
-                if (conditions.includes('No chronic') || conditions.trim() === '' || conditions.includes('No chronic or active')) {
+                const conditionItems = (itemMap['chronic and active conditions'] || [])
+                    .map(item => item.replace(/^[*-]\s*/, '').trim())
+                    .filter(Boolean);
+                if (conditionItems.length === 0 || conditions.includes('No chronic') || conditions.includes('No chronic or active')) {
                     conditionBadges.innerHTML = '<span class="condition-badge">No chronic conditions documented</span>';
                 } else {
-                    // Parse bullet points
-                    const items = conditions.split('*').filter(s => s.trim());
-                    conditionBadges.innerHTML = items.map(item => 
-                        `<span class="condition-badge">${item.trim()}</span>`
+                    conditionBadges.innerHTML = conditionItems.map(item =>
+                        `<span class="condition-badge">${item.replace(/\n/g, ' ')}</span>`
                     ).join('');
                 }
             }
-            
+
             // Update BACKGROUND card - Medications
             const medBadges = document.getElementById('medicationBadges');
             if (medBadges) {
-                const meds = sections['current medications'] || '';
-                const medItems = meds.split('*').filter(s => s.trim());
+                const medItems = (itemMap['current medications'] || [])
+                    .map(item => item.replace(/^[*-]\s*/, '').trim())
+                    .filter(Boolean);
                 if (medItems.length > 0) {
-                    medBadges.innerHTML = medItems.map(item => 
-                        `<span class="med-badge">${item.trim().replace(/\n/g, ' ')}</span>`
+                    medBadges.innerHTML = medItems.map(item =>
+                        `<span class="med-badge">${item.replace(/\n/g, ' ')}</span>`
                     ).join('');
                 } else {
                     medBadges.innerHTML = '<span class="med-badge">No current medications</span>';
@@ -1524,6 +1562,7 @@
             
             try {
                 // Build evidence lookup from clinical narrative for text matching in priorities
+                _evidencePatientId = patient?.id || '';
                 buildClinicalEvidenceLookup(clinicalNarrative);
                 
                 const backendUrl = window.parent.BACKEND_URL || 'http://localhost:5000';
@@ -1576,108 +1615,38 @@
                         summaryEl.innerHTML = storyHtml;
                     }
                     
-                    // Render Since Last Visit as block cards with evidence links
-                    if (data.sinceLastVisit && data.sinceLastVisit.length > 0) {
-                        const blocksContainer = document.getElementById('sinceLastVisitBlocks');
-                        const sinceHeader = document.getElementById('sinceLastVisitHeader');
-                        if (blocksContainer) {
-                            // Show the header and container
-                            if (sinceHeader) sinceHeader.style.display = '';
-                            blocksContainer.style.display = '';
-                            // Process evidence markers in a text string
-                            function processEvidence(text) {
-                                if (!data.evidenceMap) return text;
-                                let html = text;
-                                html = html.replace(/\[REF(\d+)\](.*?)\[\/REF\1\]/g, (match, num, innerText) => {
-                                    const refId = `REF${num}`;
-                                    const refs = data.evidenceMap[refId];
-                                    if (refs && refs.length > 0) {
-                                        const refsB64 = btoa(JSON.stringify(refs));
-                                        return `<span class="evidence-linked-text" data-refs-b64="${refsB64}">${innerText}</span>`;
-                                    }
-                                    return innerText;
-                                });
-                                html = html.replace(/\[REF\d+\]/g, '');
-                                html = html.replace(/\[\/REF\d+\]/g, '');
-                                return html;
-                            }
-                            
-                            const isNewFormat = data.sinceLastVisit[0] && typeof data.sinceLastVisit[0] === 'object' && 'header' in data.sinceLastVisit[0];
-                            
-                            if (isNewFormat) {
-                                blocksContainer.innerHTML = data.sinceLastVisit
-                                    .filter(cat => (cat.items || []).length > 0 || (cat.header || '').toLowerCase().includes('no events'))
-                                    .map(cat => {
-                                        // Strip REF markers from header before parsing
-                                        const cleanHeader = (cat.header || '').replace(/\[REF\d+\]/g, '').replace(/\[\/REF\d+\]/g, '').trim();
-                                        // Support both old format (header) and new format (category + date)
-                                        const category = cat.category || cleanHeader.replace(/\s*\([^)]*\)/, '') || '';
-                                        const date = cat.date || cleanHeader.match(/\(([^)]+)\)/)?.[1] || '';
-                                        
-                                        const headerHtml = `
-                                            <div class="since-block-header">
-                                                <span class="since-block-category">${processEvidence(category)}</span>
-                                                ${date ? `<span class="since-block-date">${date}</span>` : ''}
-                                            </div>
-                                        `;
-                                        const itemsHtml = (cat.items || []).map(item => 
-                                            `<div class="since-block-item"><span class="bullet">\u2022</span><span>${processEvidence(item)}</span></div>`
-                                        ).join('');
-                                        const footerHtml = (cat.items || []).length > 0 ? `
-                                            <div class="since-block-footer">
-                                                <a class="view-evidence-link" onclick="toggleCategoryEvidence(this)">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                                    </svg>
-                                                    View supporting evidence
-                                                </a>
-                                                <div class="since-evidence-section">
-                                                    <div class="since-evidence-header">Supporting Evidence:</div>
-                                                    <div class="since-evidence-items" data-loaded="false">
-                                                        <div class="since-evidence-item"><span class="evidence-loading">Loading evidence...</span></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ` : '';
-                                        return `<div class="since-block-card">${headerHtml}${itemsHtml}${footerHtml}</div>`;
-                                    }).join('');
-                            } else {
-                                // Fallback: flat list in a single card
-                                const itemsHtml = data.sinceLastVisit.map(b => 
-                                    `<div class="since-block-item"><span class="bullet">\u2022</span><span>${processEvidence(b)}</span></div>`
-                                ).join('');
-                                blocksContainer.innerHTML = `<div class="since-block-card">${itemsHtml}</div>`;
-                            }
-                        }
-                    } else {
-                        const blocksContainer = document.getElementById('sinceLastVisitBlocks');
-                        if (blocksContainer) blocksContainer.innerHTML = '<div class="since-block-empty">No recent changes since last visit</div>';
-                    }
-                    
                     // Render Visit Priorities
                     if (data.visitPriorities) {
                         renderBedrockPriorities(data.visitPriorities, data.evidenceMap);
                         // Send to parent for scribe sidebar
                         try { window.parent.postMessage({ type: 'bedrock-priorities', priorities: data.visitPriorities }, '*'); } catch(e) {}
                     }
-                    
+
                     // Generate checklist from priorities
                     if (data.visitPriorities) {
                         renderBedrockChecklist(data.visitPriorities);
                     }
-                    
+
+                    // Real Bedrock (or curated demo-cache) content — not the fallback path.
+                    const patientStoryFallbackBadgeOk = document.getElementById('patientStoryFallbackBadge');
+                    const visitPrioritiesFallbackBadgeOk = document.getElementById('visitPrioritiesFallbackBadge');
+                    if (patientStoryFallbackBadgeOk) patientStoryFallbackBadgeOk.style.display = 'none';
+                    if (visitPrioritiesFallbackBadgeOk) visitPrioritiesFallbackBadgeOk.style.display = 'none';
+
                     console.log('[Bedrock] Pre-visit content rendered from single call');
                     return;
                 }
             } catch (e) {
                 console.warn('Pre-visit synthesis failed, using fallbacks:', e);
             }
-            
+
             // Fallback: try old separate endpoints
             const age = patient?.age || '';
             const gender = patient?.gender || '';
             const summaryText = sections['overview'] || 'No overview available';
             if (summaryEl) summaryEl.innerHTML = `<strong>${age} ${gender}</strong> - ${summaryText.replace(/\n/g, ' ')}`;
+            const patientStoryFallbackBadge = document.getElementById('patientStoryFallbackBadge');
+            if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = '';
             synthesizePatientNarrative(sections, patient, summaryEl, summaryEl.innerHTML);
             synthesizeVisitPriorities(sections, patient, resultsText);
         }
@@ -1697,14 +1666,19 @@
                     })
                 });
                 const data = await resp.json();
+                const patientStoryFallbackBadge = document.getElementById('patientStoryFallbackBadge');
                 if (data.success && data.narrative) {
                     summaryEl.innerHTML = sanitizeLLMText(data.narrative);
+                    if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = 'none';
                 } else {
                     summaryEl.innerHTML = fallbackHtml;
+                    if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = '';
                 }
             } catch (e) {
                 console.warn('Narrative synthesis failed, using fallback:', e);
                 summaryEl.innerHTML = fallbackHtml;
+                const patientStoryFallbackBadge = document.getElementById('patientStoryFallbackBadge');
+                if (patientStoryFallbackBadge) patientStoryFallbackBadge.style.display = '';
             }
         }
         
@@ -1755,14 +1729,18 @@
                     renderBedrockChecklist(data.priorities);
                     // Send priorities to parent window for scribe sidebar
                     try { window.parent.postMessage({ type: 'bedrock-priorities', priorities: data.priorities }, '*'); } catch(e) {}
+                    const visitPrioritiesFallbackBadgeOk = document.getElementById('visitPrioritiesFallbackBadge');
+                    if (visitPrioritiesFallbackBadgeOk) visitPrioritiesFallbackBadgeOk.style.display = 'none';
                     console.log('[Bedrock] Priorities & checklist rendered from Bedrock');
                     return;
                 }
             } catch (e) {
                 console.warn('Bedrock priorities failed, using regex fallback:', e);
             }
-            
-            // Fallback to regex-based generation
+
+            // Fallback to regex-based generation — no LLM involved, see generateVisitPriorities()
+            const visitPrioritiesFallbackBadge = document.getElementById('visitPrioritiesFallbackBadge');
+            if (visitPrioritiesFallbackBadge) visitPrioritiesFallbackBadge.style.display = '';
             generateVisitPriorities(sections, resultsText);
             generateVisitChecklist(sections, resultsText);
         }
@@ -1816,6 +1794,8 @@
         
         function buildClinicalEvidenceLookup(clinicalNarrative) {
             if (!clinicalNarrative || !Array.isArray(clinicalNarrative)) return;
+            _evidenceNarrative = clinicalNarrative;
+            _evidenceRefMap = null;
             _clinicalEvidenceLookup = [];
             for (const item of clinicalNarrative) {
                 const text = (item.Text || '').trim();
@@ -1831,11 +1811,319 @@
             }
         }
         
+
+        // ---------------------------------------------------------------
+        // Evidence ref resolution. The Patient Insights job cites evidence with its own
+        // sequential IDs ("Observation/14"), not HealthLake IDs, so a direct
+        // GET /api/fhir/<type>/<id> 404s. Resolve them by matching the cited narrative
+        // line ("Body weight: 299.8 lbs on 11/01/2025.") against the patient's real
+        // resources, fetched lazily once via /api/fhir/patient/<id>/resources.
+        // ---------------------------------------------------------------
+        let _evidenceNarrative = null;
+        let _evidencePatientId = '';
+        let _evidenceRefMap = null;       // Map: job ref -> {type, id} | null (unmatched)
+        let _evidenceResourcesPromise = null;
+        let _evidenceRes = null;          // the patient's resources from /resources, for candidate suggestions
+
+        function _evidenceDateKey(iso) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+            return m ? `${m[2]}/${m[3]}/${m[1]}` : '';
+        }
+
+        function _evidenceCleanText(t) {
+            return (t || '').replace(/[*#]/g, '').replace(/^\s*[-•]\s*/, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function _evidenceCitedText(ref) {
+            for (const item of (_evidenceNarrative || [])) {
+                if ((item.Evidence || []).includes(ref)) {
+                    const t = _evidenceCleanText(item.Text);
+                    if (t.length > 3) return t;
+                }
+            }
+            return '';
+        }
+
+        async function _loadEvidenceRefMap() {
+            if (_evidenceRefMap) return _evidenceRefMap;
+            if (!_evidenceResourcesPromise) {
+                const backendUrl = window.parent.BACKEND_URL || 'http://localhost:5000';
+                _evidenceResourcesPromise = fetch(`${backendUrl}/api/fhir/patient/${encodeURIComponent(_evidencePatientId)}/resources`)
+                    .then(r => r.json())
+                    .catch(() => ({ success: false }));
+            }
+            const data = await _evidenceResourcesPromise;
+            if (!data || !data.success) return null;   // demo mode / lookup failed: caller keeps raw refs
+
+            _evidenceRes = data.resources || {};
+            const map = new Map();
+            const claimed = new Set();
+            const claim = (ref, c) => { map.set(ref, { type: c.type, id: c.id }); claimed.add(c.type + '/' + c.id); };
+            const items = _evidenceNarrative || [];
+
+            // Pass 1: lines that cite exactly one source are unambiguous.
+            for (const item of items) {
+                const refs = item.Evidence || [];
+                if (refs.length !== 1 || map.has(refs[0])) continue;
+                const ref = refs[0];
+                if (ref.startsWith('Patient/')) { map.set(ref, { type: 'Patient', id: _evidencePatientId }); continue; }
+                const best = _bestEvidenceMatch(ref, _evidenceCleanText(item.Text), claimed);
+                if (best) claim(ref, best);
+            }
+            // Pass 2: refs only cited inside multi-source sentences — match on all their text,
+            // excluding records already claimed by other refs (elimination).
+            const allRefs = new Set();
+            items.forEach(i => (i.Evidence || []).forEach(r => allRefs.add(r)));
+            for (const ref of allRefs) {
+                if (map.has(ref)) continue;
+                if (ref.startsWith('Patient/')) { map.set(ref, { type: 'Patient', id: _evidencePatientId }); continue; }
+                const best = _bestEvidenceMatch(ref, _evidenceTextsFor(ref), claimed);
+                if (best) claim(ref, best);
+            }
+            _evidenceRefMap = map;
+            return map;
+        }
+
+        // ---- Matching: independent of how the job words a line (colons, "as of", case) ----
+        const _EVIDENCE_STOPWORDS = new Set(['with', 'from', 'that', 'this', 'were', 'have', 'been', 'unspecified', 'other', 'level', 'oral', 'tablet', 'capsule', 'due', 'and', 'the', 'for']);
+
+        function _evidenceDatesIn(text) {
+            return (text.match(/\d{1,2}\/\d{1,2}\/\d{4}/g) || []).map(d => d.split('/').map(x => x.padStart(x.length === 4 ? 4 : 2, '0')).join('/'));
+        }
+
+        function _evidenceHasNumber(textNoDates, value) {
+            const v = String(value).replace(/\.0+$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp('(^|[^\\d.])' + v + '(?!\\d|\\.\\d)').test(textNoDates);
+        }
+
+        function _evidenceTextsFor(ref) {
+            return (_evidenceNarrative || []).filter(i => (i.Evidence || []).includes(ref)).map(i => _evidenceCleanText(i.Text)).join(' ');
+        }
+
+        // ok = confident enough to auto-link; score breaks ties between candidates.
+        function _evidenceScore(type, r, rawText) {
+            const t = rawText.toLowerCase();
+            const dates = _evidenceDatesIn(t);
+            const dk = _evidenceDateKey(r.date);
+            const dateHit = !!dk && dates.includes(dk);
+            const words = (r.name || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !_EVIDENCE_STOPWORDS.has(w));
+            const nameHits = words.filter(w => new RegExp('\\b' + w + '\\b').test(t)).length;
+            let ok = false, score = nameHits;
+            if (type === 'Observation') {
+                const valueHit = r.value !== undefined && r.value !== null && r.value !== '' &&
+                    _evidenceHasNumber(t.replace(/\d{1,2}\/\d{1,2}\/\d{4}/g, ' '), r.value);
+                score += (valueHit ? 3 : 0) + (dateHit ? 3 : 0);
+                ok = nameHits >= 1 && valueHit && (dates.length === 0 || dateHit);
+            } else if (type === 'MedicationRequest') {
+                ok = nameHits >= 1;
+            } else if (type === 'Condition') {
+                ok = nameHits >= 1 && nameHits >= Math.ceil(words.length / 2);
+            } else if (type === 'Encounter') {
+                score = dateHit ? 3 : 0;
+                ok = dateHit;
+            }
+            return { ok, score };
+        }
+
+        // Best unclaimed resource of the ref's type for this text, or null if none / ambiguous.
+        function _bestEvidenceMatch(ref, text, claimed) {
+            const type = ref.split('/')[0];
+            const pool = ((_evidenceRes && _evidenceRes[type]) || []).filter(r => !claimed.has(type + '/' + r.id));
+            const scored = pool.map(r => ({ r, s: _evidenceScore(type, r, text) })).filter(x => x.s.ok).sort((a, b) => b.s.score - a.s.score);
+            if (!scored.length) return null;
+            if (scored.length > 1 && scored[1].s.score === scored[0].s.score) return null;
+            return { type, id: scored[0].r.id };
+        }
+
+        // Markup for a citation that could not be tied to an EHR record: visibly different
+        // (amber) and states why.
+        function unlinkedEvidenceHtml(ref, kind) {
+            const u = unresolvedEvidenceText(ref);
+            const cls = kind === 'popover' ? 'evidence-popover-item' : 'since-evidence-item';
+            const cited = u.cited ? `<div>${escapeHtml(u.cited)}</div>` : '';
+            return `<div class="${cls} evidence-unlinked">
+                <div><strong>${escapeHtml(u.type)}</strong><span class="evidence-unlinked-badge" title="The insights job cited this with an internal ID that can't be traced to an EHR record">Source not linked</span></div>
+                ${cited}
+            </div>`;
+        }
+
+        // Returns {type,id} to fetch, or null when the ref can't be resolved to a real resource.
+        // When resource lookup is unavailable (demo mode), raw refs pass through unchanged.
+        async function resolveEvidenceRef(ref) {
+            const parts = ref.split('/');
+            if (parts.length !== 2) return null;
+            const map = await _loadEvidenceRefMap();
+            if (!map) return { type: parts[0], id: parts[1] };
+            return map.get(ref) || null;
+        }
+
+        function unresolvedEvidenceText(ref) {
+            const cited = _evidenceCitedText(ref);
+            return { type: ref.split('/')[0], cited };
+        }
+
         // Text-based evidence matching is no longer needed — Bedrock now includes [REFn] markers in Visit Priorities
         function addEvidenceByTextMatch(rawText) {
             return escapeHtml(rawText);
         }
         
+
+
+        // ---------------------------------------------------------------
+        // Custom Visit Priorities: clinician-authored, separate from the AI-generated
+        // lists above (which are never modified). Stored per patient in this browser's
+        // localStorage only — never sent to the server or the EHR.
+        // ---------------------------------------------------------------
+        let _customPriorityPatientId = null;
+        let _customPriorities = [];      // [{ id, title, description, _new? }]
+
+        function _customPriorityKey() { return 'customVisitPriorities:' + _customPriorityPatientId; }
+
+        function _loadCustomPriorities() {
+            if (!_customPriorityPatientId) return [];
+            try {
+                const arr = JSON.parse(localStorage.getItem(_customPriorityKey()) || '[]');
+                return Array.isArray(arr)
+                    ? arr.filter(x => x && typeof x.id === 'string').map(x => ({ id: x.id, title: String(x.title || ''), description: String(x.description || '') }))
+                    : [];
+            } catch (e) { return []; }
+        }
+
+        function _saveCustomPriorities() {
+            if (!_customPriorityPatientId) return;   // no patient id: keep in memory only
+            try {
+                localStorage.setItem(_customPriorityKey(), JSON.stringify(
+                    _customPriorities.filter(x => !x._new).map(({ id, title, description }) => ({ id, title, description }))));
+            } catch (e) { /* storage unavailable (private mode / quota): keep in memory */ }
+        }
+
+        function initCustomPriorities(patientId) {
+            const id = patientId || '';
+            if (_customPriorityPatientId === id && document.getElementById('customPriorityList').dataset.ready) return;
+            _customPriorityPatientId = id;
+            _customPriorities = _loadCustomPriorities();
+            document.getElementById('customPriorityList').dataset.ready = '1';
+            renderCustomPriorities();
+        }
+
+        function _customButton(label, cls, onClick) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            if (cls) b.className = cls;
+            b.textContent = label;
+            b.addEventListener('click', onClick);
+            return b;
+        }
+
+        function renderCustomPriorities(editingId) {
+            const list = document.getElementById('customPriorityList');
+            if (!list) return;
+            list.textContent = '';
+            if (!_customPriorities.length) {
+                const hint = document.createElement('div');
+                hint.className = 'custom-priorities-empty';
+                hint.textContent = 'No custom priorities yet. Add your own items for this visit.';
+                list.appendChild(hint);
+                return;
+            }
+            _customPriorities.forEach(entry => {
+                const editing = entry.id === editingId;
+                const item = document.createElement('div');
+                item.className = 'priority-item custom' + (editing ? ' editing' : '');
+                const content = document.createElement('div');
+                content.className = 'priority-content';
+                const title = document.createElement('div');
+                title.className = 'priority-title';
+                title.textContent = entry.title;
+                const desc = document.createElement('div');
+                desc.className = 'priority-description';
+                desc.textContent = entry.description;
+                const tag = document.createElement('span');
+                tag.className = 'custom-priority-tag';
+                tag.textContent = 'Custom';
+                content.append(title, desc, tag);
+
+                const actions = document.createElement('div');
+                actions.className = 'custom-priority-actions';
+                if (editing) {
+                    title.setAttribute('contenteditable', 'true'); title.dataset.placeholder = 'Priority title';
+                    desc.setAttribute('contenteditable', 'true'); desc.dataset.placeholder = 'Description (optional)';
+                    const done = () => {
+                        const t = title.textContent.trim(), d = desc.textContent.trim();
+                        if (!t && !d) { _customPriorities = _customPriorities.filter(x => x.id !== entry.id); }
+                        else { entry.title = t; entry.description = d; delete entry._new; }
+                        _saveCustomPriorities();
+                        renderCustomPriorities();
+                    };
+                    const cancel = () => {
+                        if (entry._new) _customPriorities = _customPriorities.filter(x => x.id !== entry.id);
+                        renderCustomPriorities();
+                    };
+                    actions.append(_customButton('Done', '', done), _customButton('Cancel', '', cancel));
+                    item.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cancel(); } });
+                    setTimeout(() => title.focus(), 0);
+                } else {
+                    actions.append(
+                        _customButton('Edit', '', () => renderCustomPriorities(entry.id)),
+                        _customButton('Delete', 'custom-priority-delete', () => {
+                            _customPriorities = _customPriorities.filter(x => x.id !== entry.id);
+                            _saveCustomPriorities();
+                            renderCustomPriorities();
+                        }));
+                }
+                item.append(content, actions);
+                list.appendChild(item);
+            });
+        }
+
+        (function wireCustomPriorityAdd() {
+            const btn = document.getElementById('customPriorityAddBtn');
+            if (!btn) return;
+            btn.addEventListener('click', () => {
+                // Drop any other unsaved blank item, then open a new one for editing.
+                _customPriorities = _customPriorities.filter(x => !x._new);
+                const entry = { id: 'cp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: '', description: '', _new: true };
+                _customPriorities.push(entry);
+                renderCustomPriorities(entry.id);
+            });
+        })();
+
+        // ---------------------------------------------------------------
+        // Patient Story: flag inline text whose cited evidence has no matching EHR record.
+        // ---------------------------------------------------------------
+        async function annotateUnsourcedEvidence() {
+            const root = document.getElementById('situationCard');
+            const legend = document.getElementById('evidenceLegend');
+            if (!root || !_evidenceNarrative || !_evidencePatientId) return;
+            const spans = root.querySelectorAll('.evidence-linked-text[data-refs-b64]');
+            if (!spans.length) { if (legend) legend.style.display = 'none'; return; }
+            const map = await _loadEvidenceRefMap();
+            if (!map) return;                         // demo mode / lookup unavailable: nothing to compare against
+            let flagged = 0;
+            spans.forEach(span => {
+                let refs = [];
+                try { refs = [...new Set(JSON.parse(atob(span.getAttribute('data-refs-b64'))))]; } catch (e) { return; }
+                if (!refs.length) return;
+                if (span.dataset.baseTitle === undefined) span.dataset.baseTitle = span.getAttribute('title') || '';
+                const linked = refs.filter(r => map.has(r)).length;
+                span.classList.toggle('evidence-unsourced', linked === 0);
+                let title = span.dataset.baseTitle;
+                if (linked === 0) { title = 'No matching EHR source record found' + (title ? ' — ' + title : ''); flagged++; }
+                else if (linked < refs.length) title += `${title ? ' ' : ''}(${linked} of ${refs.length} sources linked to EHR records)`;
+                if (title) span.setAttribute('title', title);
+            });
+            if (legend) legend.style.display = flagged ? '' : 'none';
+        }
+
+        (function watchStoryForEvidence() {
+            let timer = null;
+            const schedule = () => { clearTimeout(timer); timer = setTimeout(annotateUnsourcedEvidence, 150); };
+            ['situationSummary'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) new MutationObserver(schedule).observe(el, { childList: true });
+            });
+        })();
+
         function renderBedrockPriorities(priorities, evidenceMap) {
             const priorityListHigh = document.getElementById('priorityListHigh');
             const priorityListOngoing = document.getElementById('priorityListOngoing');
@@ -1978,7 +2266,7 @@
             if (itemsContainer.getAttribute('data-loaded') === 'true') return;
             
             // Collect all FHIR refs from evidence-linked-text spans in this card/priority
-            const card = linkEl.closest('.since-block-card') || linkEl.closest('.priority-item');
+            const card = linkEl.closest('.priority-item');
             const evidenceSpans = card.querySelectorAll('.evidence-linked-text[data-refs-b64]');
             const allRefs = new Set();
             evidenceSpans.forEach(span => {
@@ -1998,11 +2286,17 @@
             const backendUrl = window.parent.BACKEND_URL || 'http://localhost:5000';
             let html = '';
             const uniqueRefs = [...allRefs];
+            let unlinkedCount = 0;
             
             for (const ref of uniqueRefs) {
-                const parts = ref.split('/');
-                if (parts.length !== 2) continue;
-                const [resourceType, resourceId] = parts;
+                if (ref.split('/').length !== 2) continue;
+                const resolved = await resolveEvidenceRef(ref);
+                if (!resolved) {
+                    html += unlinkedEvidenceHtml(ref, 'list');
+                    unlinkedCount++;
+                    continue;
+                }
+                const resourceType = resolved.type, resourceId = resolved.id;
                 
                 try {
                     const resp = await fetch(`${backendUrl}/api/fhir/${resourceType}/${resourceId}`);
@@ -2030,6 +2324,17 @@
             }
             
             itemsContainer.innerHTML = html || '<div class="since-evidence-item"><span style="color:#9ca3af;">No evidence details available</span></div>';
+            
+            // Coverage: how many of the cited sources tie to a real EHR record.
+            const evHeader = itemsContainer.parentElement && itemsContainer.parentElement.querySelector('.since-evidence-header');
+            if (evHeader && _evidenceRefMap && uniqueRefs.length) {
+                const linked = uniqueRefs.length - unlinkedCount;
+                const cov = document.createElement('span');
+                cov.className = 'evidence-coverage' + (unlinkedCount ? ' partial' : '');
+                cov.textContent = `${linked} of ${uniqueRefs.length} sources linked to EHR records`;
+                evHeader.querySelector('.evidence-coverage')?.remove();
+                evHeader.appendChild(cov);
+            }
             itemsContainer.setAttribute('data-loaded', 'true');
         }
 
@@ -2084,9 +2389,13 @@
             const uniqueRefs = [...new Set(refs)];
             
             for (const ref of uniqueRefs) {
-                const parts = ref.split('/');
-                if (parts.length !== 2) continue;
-                const [resourceType, resourceId] = parts;
+                if (ref.split('/').length !== 2) continue;
+                const resolved = await resolveEvidenceRef(ref);
+                if (!resolved) {
+                    html += unlinkedEvidenceHtml(ref, 'popover');
+                    continue;
+                }
+                const resourceType = resolved.type, resourceId = resolved.id;
                 
                 try {
                     const resp = await fetch(`${backendUrl}/api/fhir/${resourceType}/${resourceId}`);
@@ -2306,10 +2615,10 @@
             if (!refsStr) { console.log('[Download] No refs found'); return; }
             const refs = refsStr.split(',');
             for (const ref of refs) {
-                const parts = ref.split('/');
-                console.log('[Download] Processing ref:', ref, 'parts:', parts);
-                if (parts.length === 2) {
-                    await downloadFhirResource(parts[0], parts[1]);
+                console.log('[Download] Processing ref:', ref);
+                const resolved = await resolveEvidenceRef(ref);
+                if (resolved) {
+                    await downloadFhirResource(resolved.type, resolved.id);
                 }
             }
         }
@@ -2705,18 +3014,6 @@
             }
         }
         
-        function updateSinceLastVisit(narrative) {
-            // Update the "Since last visit" subsection header area
-            const subsectionHeader = document.querySelector('.visit-card:first-of-type .subsection-header');
-            if (subsectionHeader && narrative.trim()) {
-                // Find the date from narrative if present
-                const dateMatch = narrative.match(/(\d{2}\/\d{2}\/\d{4})/);
-                if (dateMatch) {
-                    subsectionHeader.textContent = `Since last visit (${dateMatch[1]})`;
-                }
-            }
-        }
-        
         function updateTrends(narrative) {
             // Trends data is now sent to Bedrock via synthesizePrevisitContent
             // which incorporates it into Visit Priorities. No direct rendering needed.
@@ -2740,20 +3037,27 @@
             
             const items = [];
             
-            // Check blood pressure
-            const bpMatch = resultsText.match(/Blood pressure\s+(\d+)\/(\d+)\s*mmHg/i);
+            // Check blood pressure. Tolerates both the old cached-demo combined
+            // "Blood pressure 145/94 mmHg" format (diastolic present) and the live
+            // API's "Systolic blood pressure was 145 mmHg" sentence style (diastolic
+            // absent — this dataset only has systolic observations).
+            const bpMatch = resultsText.match(/systolic blood pressure[^0-9]*?(\d+)(?:\/(\d+))?\s*mmHg/i)
+                || resultsText.match(/blood pressure[^0-9]*?(\d+)\/(\d+)\s*mmHg/i);
             if (bpMatch) {
                 const systolic = parseInt(bpMatch[1]);
-                const diastolic = parseInt(bpMatch[2]);
-                if (systolic >= 140 || diastolic >= 90) {
-                    items.push(`Review elevated blood pressure (${bpMatch[1]}/${bpMatch[2]} mmHg)`);
-                } else if (systolic >= 130 || diastolic >= 80) {
-                    items.push(`Monitor blood pressure (${bpMatch[1]}/${bpMatch[2]} mmHg - borderline)`);
+                const diastolic = bpMatch[2] ? parseInt(bpMatch[2]) : null;
+                const reading = diastolic !== null ? `${systolic}/${diastolic} mmHg` : `${systolic} mmHg`;
+                const highThreshold = diastolic !== null ? (systolic >= 140 || diastolic >= 90) : systolic >= 140;
+                const borderlineThreshold = diastolic !== null ? (systolic >= 130 || diastolic >= 80) : systolic >= 130;
+                if (highThreshold) {
+                    items.push(`Review elevated blood pressure (${reading})`);
+                } else if (borderlineThreshold) {
+                    items.push(`Monitor blood pressure (${reading} - borderline)`);
                 }
             }
-            
+
             // Check glucose
-            const glucoseMatch = resultsText.match(/Glucose\s+(\d+)\s*mg\/dL/i);
+            const glucoseMatch = resultsText.match(/Glucose[^0-9]*(\d+)\s*mg\/dL/i);
             if (glucoseMatch) {
                 const glucose = parseInt(glucoseMatch[1]);
                 if (glucose >= 126) {

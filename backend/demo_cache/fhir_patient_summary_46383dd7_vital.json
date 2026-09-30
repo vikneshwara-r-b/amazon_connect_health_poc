@@ -1,0 +1,97 @@
+{
+  "success": true,
+  "section": "vitals",
+  "patientId": "46383dd73c1d282831d3e7c9101d4901497c32345d4e2fcc657c2eaf9d03830d",
+  "count": 8,
+  "totalAvailable": 8,
+  "results": [
+    {
+      "id": "",
+      "name": "Systolic blood pressure",
+      "code": "8480-6",
+      "codeSystem": "http://loinc.org",
+      "value": 115,
+      "unit": "mmHg",
+      "category": "vital-signs",
+      "date": "2023-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Diastolic blood pressure",
+      "code": "8462-4",
+      "codeSystem": "http://loinc.org",
+      "value": 85,
+      "unit": "mmHg",
+      "category": "vital-signs",
+      "date": "2023-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Heart rate",
+      "code": "8867-4",
+      "codeSystem": "http://loinc.org",
+      "value": 80,
+      "unit": "bpm",
+      "category": "vital-signs",
+      "date": "2023-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Respiratory rate",
+      "code": "9279-1",
+      "codeSystem": "http://loinc.org",
+      "value": 17,
+      "unit": "breaths/min",
+      "category": "vital-signs",
+      "date": "2023-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Body temperature",
+      "code": "8310-5",
+      "codeSystem": "http://loinc.org",
+      "value": 36,
+      "unit": "Cel",
+      "category": "vital-signs",
+      "date": "2023-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Oxygen saturation",
+      "code": "59408-5",
+      "codeSystem": "http://loinc.org",
+      "value": 99,
+      "unit": "%",
+      "category": "vital-signs",
+      "date": "2023-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Body weight",
+      "code": "29463-7",
+      "codeSystem": "http://loinc.org",
+      "value": 72.6,
+      "unit": "kg",
+      "category": "vital-signs",
+      "date": "2023-11-01",
+      "status": "final"
+    },
+    {
+      "id": "",
+      "name": "Body height",
+      "code": "8302-2",
+      "codeSystem": "http://loinc.org",
+      "value": 180.3,
+      "unit": "cm",
+      "category": "vital-signs",
+      "date": "2023-11-01",
+      "status": "final"
+    }
+  ]
+}

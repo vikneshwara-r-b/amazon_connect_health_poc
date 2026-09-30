@@ -46,6 +46,8 @@ existing_subscription_id = get_context(app, "existingSubscriptionId") or None
 healthlake_datastore_name = get_context(app, "healthlakeDatastoreName", "connect-health-demo")
 existing_healthlake_datastore_id = get_context(app, "existingHealthlakeDatastoreId") or None
 cors_origin = get_context(app, "corsOrigin", "*")
+medical_codes_provider = get_context(app, "medicalCodesProvider", "auto")
+show_cpt_codes = get_context(app, "showCptCodes", "true").lower() == "true"
 streaming_certificate_arn = get_context(app, "streamingCertificateArn") or None
 frontend_bucket_name = get_context(
     # Account-scoped, matching OutputBucket/SourceBucket's naming convention
@@ -62,14 +64,24 @@ enable_cognito = get_context(app, "enableCognito", "true").lower() == "true"
 use_cloudfront = get_context(app, "useCloudFront", "true").lower() == "true"
 
 # A single Vpc.from_lookup call, shared by both service stacks, so synth doesn't
-# do the default-VPC context lookup twice for the same account/region.
+# do the VPC context lookup twice for the same account/region. Defaults to the
+# account's default VPC; pass `-c vpcId=vpc-...` for accounts that have no default
+# VPC (the failed lookup otherwise surfaces as bogus 'vpc-12345'/'s-12345'
+# CloudFormation validation errors on every downstream resource). The chosen VPC
+# needs >= 2 public subnets in different AZs -- the ALBs and the ECS tasks
+# (assign_public_ip=True) are placed in public subnets.
+vpc_id = get_context(app, "vpcId") or None
 network_stack = cdk.Stack(app, "AmazonConnectHealthNetwork", env=env)
-vpc = ec2.Vpc.from_lookup(network_stack, "DefaultVpc", is_default=True)
+if vpc_id:
+    vpc = ec2.Vpc.from_lookup(network_stack, "DefaultVpc", vpc_id=vpc_id)
+else:
+    vpc = ec2.Vpc.from_lookup(network_stack, "DefaultVpc", is_default=True)
 
 prereqs_stack = ConnectHealthResourcesStack(
     app,
     "AmazonConnectHealthPrereqs",
     env=env,
+    environment=environment_name,
     connect_health_domain_name=connect_health_domain_name,
     existing_domain_id=existing_domain_id,
     existing_subscription_id=existing_subscription_id,
@@ -94,9 +106,8 @@ backend_stack = BackendStack(
     env=env,
     vpc=vpc,
     environment=environment_name,
-    healthlake_datastore_id=prereqs_stack.healthlake_datastore_id,
-    domain_id=prereqs_stack.domain_id,
     cors_origin=cors_origin,
+    medical_codes_provider=medical_codes_provider,
     user_pool=cognito_stack.user_pool if cognito_stack else None,
     user_pool_client=cognito_stack.user_pool_client if cognito_stack else None,
     use_cloudfront=use_cloudfront,
@@ -123,8 +134,6 @@ streaming_stack = StreamingStack(
     vpc=vpc,
     environment=environment_name,
     output_bucket_uri=f"s3://{backend_stack.output_bucket.bucket_name}",
-    domain_id=prereqs_stack.domain_id,
-    subscription_id=prereqs_stack.subscription_id,
     certificate_arn=streaming_certificate_arn,
     use_cloudfront=use_cloudfront,
 )
@@ -165,6 +174,8 @@ frontend_stack = FrontendStack(
     if cognito_stack
     else None,
     use_cloudfront=use_cloudfront,
+    show_cpt_codes=show_cpt_codes,
+    medical_codes_provider=medical_codes_provider,
 )
 if use_cloudfront:
     frontend_stack.add_stack_dependency(backend_cloudfront_stack)

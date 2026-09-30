@@ -6,12 +6,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SBAR Format</title>
+    <title>Patient Point of Care Portal</title>
     <!-- SBAR Format - Updated 2026-02-04 -->
     <!-- Refactored: Modular Structure - 2026-02-05 -->
     
     <!-- External CSS -->
     <link rel="stylesheet" href="css/main.css">
+
+    <!-- Modern SVG favicon -->
+<link rel="icon" type="image/svg+xml" href="assets/Arch_Amazon-Connect_64.svg">
     
     
     <!-- Early script to define openPatient function for inline onclick handlers -->
@@ -27,9 +30,13 @@
             }
             
             // Show the patient portal background
+            // Must be 'flex' (not 'block') to match .patient-portal-background's CSS
+            // (display: flex; flex-direction: column) — an inline style always overrides
+            // the stylesheet, so 'block' here would silently collapse that layout and let
+            // .main-content grow past the viewport instead of being height-bounded.
             const patientPortal = document.querySelector('.patient-portal-background');
             if (patientPortal) {
-                patientPortal.style.display = 'block';
+                patientPortal.style.display = 'flex';
             }
             
             // Show the iframe container
@@ -268,12 +275,6 @@
             </div>
             
             <div class="control-buttons">
-                <button class="control-btn flag-btn" onclick="flagMoment()" title="Flag a Moment (Spacebar)" data-flag-count="0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-                        <line x1="4" y1="22" x2="4" y2="15"/>
-                    </svg>
-                </button>
                 <button class="control-btn pause-btn" onclick="pauseConsultation(event)" title="Pause Recording">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <rect x="6" y="4" width="4" height="16"/>
@@ -303,7 +304,7 @@
             <a href="#" class="tab active" id="tabProfile">Profile</a>
             <a href="#" class="tab" id="tabMedHistory">Medical history</a>
             <a href="#" class="tab" id="tabClinicalNotes">Clinical notes</a>
-            <a href="#" class="tab">Lab results</a>
+            <a href="#" class="tab" id="tabLabResults">Lab results</a>
             <a href="#" class="tab">Reports</a>
             <a href="#" class="tab">Admin</a>
         </div>
@@ -326,20 +327,10 @@
                 <!-- Left Panel -->
                 <div class="left-panel">
                     <!-- Diagnoses -->
-                    <div class="section">
+                    <div class="section" id="diagnosesSection">
                         <div class="section-header"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> Diagnoses</div>
-                        <div class="section-content">
-                            <div class="section-subheader">Chronic diagnoses</div>
-                            <div class="diagnosis-item">(Z79.4) Hypertension</div>
-                            <div class="diagnosis-item">(Z50.00) Diabetes</div>
-                            <div class="diagnosis-item">(J43.9) Asthma</div>
-                            <div class="diagnosis-item">(Z50.00) Diabetes</div>
-                            <div class="diagnosis-item">(J40.1) Hypertension</div>
-                            <div class="diagnosis-item">(Z50.00) Diabetes</div>
-                            <div class="diagnosis-item">(Z79.4) Hypertension</div>
-                            
-                            <div class="section-subheader">Acute diagnoses</div>
-                            <div class="section-note">No active Acute diagnoses</div>
+                        <div class="section-content" id="diagnosesContent">
+                            <div class="section-note">Loading diagnoses…</div>
                         </div>
                     </div>
 
@@ -368,27 +359,18 @@
                     </div>
 
                     <!-- Recent Lab Results -->
-                    <div class="section">
+                    <div class="section" id="recentLabsSection">
                         <div class="section-header"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M7 2v2H6c-.55 0-1 .45-1 1v16c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V5c0-.55-.45-1-1-1h-1V2h-2v2H9V2H7zm12 17H5V8h14v11z"/></svg> Recent lab results</div>
-                        <div class="section-content">
-                            <div class="section-subheader">Last drawn: 01/15/2026</div>
-                            <div class="section-detail">• CBC: WNL</div>
-                            <div class="section-detail">• BMP: Glucose 118 mg/dL (borderline)</div>
-                            <div class="section-detail">• Lipid Panel: LDL 128 mg/dL, HDL 52 mg/dL</div>
-                            <div class="section-detail">• TSH: 2.1 mIU/L (normal)</div>
-                            <div class="section-detail">• Creatinine: 0.9 mg/dL (normal)</div>
+                        <div class="section-content" id="recentLabsContent">
+                            <div class="section-note">Loading labs…</div>
                         </div>
                     </div>
 
                     <!-- Vital Signs -->
-                    <div class="section">
-                        <div class="section-header"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg> Vital signs (Last: 01/20/2026)</div>
-                        <div class="section-content">
-                            <div class="section-detail">• BP: 132/84 mmHg</div>
-                            <div class="section-detail">• HR: 74 bpm</div>
-                            <div class="section-detail">• Temp: 98.6°F</div>
-                            <div class="section-detail">• SpO2: 98%</div>
-                            <div class="section-detail">• Weight: 165 lbs (BMI: 27.4)</div>
+                    <div class="section" id="vitalSignsSection">
+                        <div class="section-header" id="vitalSignsHeader"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg> <span id="vitalSignsHeaderText">Vital signs</span></div>
+                        <div class="section-content" id="vitalSignsContent">
+                            <div class="section-note">Loading vitals…</div>
                         </div>
                     </div>
                 </div>
@@ -464,6 +446,9 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Lab Results tab content — sibling of .content-area, shown/hidden by tabLabResults click handler in js/patient-data.js -->
+            <div class="lab-results-tab-content" id="labResultsTabContent" style="display: none; flex: 1; overflow-y: auto; background: #ffffff;"></div>
         </div>
     </div>
 
@@ -635,12 +620,6 @@
 
             <!-- Toggle Icons Row -->
             <div class="scribe-toggle-row">
-                <button class="scribe-toggle-btn" onclick="flagMoment()" title="Flag a Moment (Spacebar)" data-flag-count="0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-                        <line x1="4" y1="22" x2="4" y2="15"/>
-                    </svg>
-                </button>
                 <button class="scribe-toggle-btn" id="toggleTranscriptBtn" onclick="toggleScribeTranscript()" title="Toggle Live Transcription">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
@@ -656,11 +635,6 @@
                         <path d="M9 14l2 2 4-4"/>
                     </svg>
                 </button>
-            </div>
-            
-            <!-- Keyboard Shortcut Hint -->
-            <div class="keyboard-hint">
-                <kbd>Space</kbd> to flag a moment
             </div>
         </div>
     </div>
@@ -801,14 +775,6 @@
                     </div>
                     <div class="step-text">Formatting clinical notes</div>
                 </div>
-                <div class="processing-step" id="step4">
-                    <div class="step-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                        </svg>
-                    </div>
-                    <div class="step-text">Generating medical codes</div>
-                </div>
             </div>
         </div>
     </div>
@@ -916,6 +882,14 @@
                                 </svg>
                                 <span id="patientSummaryVisitType">Follow-up Visit</span>
                             </div>
+                            <div class="patient-summary-meta-item avs-id-item" title="Click to copy">
+                                <strong>Patient ID:</strong>
+                                <span class="avs-id" id="patientSummaryPatientId" onclick="copyAvsId(this)">&mdash;</span>
+                            </div>
+                            <div class="patient-summary-meta-item avs-id-item" title="Click to copy">
+                                <strong>Encounter ID:</strong>
+                                <span class="avs-id" id="patientSummaryEncounterId" onclick="copyAvsId(this)">&mdash;</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -1009,15 +983,16 @@
                     Back to Patient List
                 </button>
                 <div class="completion-actions-right">
-                    <button class="completion-btn secondary" onclick="closePatientNotesOverlay()">
+                    <span class="avs-save-status" id="avsSaveStatus" role="status"></span>
+                    <button class="completion-btn secondary" id="avsEditToggleBtn" onclick="toggleAvsEditMode()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
-                        Edit Summary
+                        <span id="avsEditToggleLabel">Edit Summary</span>
                     </button>
-                    <button class="completion-btn primary" onclick="showFinalCompletionOverlay()">
-                        Continue
+                    <button class="completion-btn primary" id="avsContinueBtn" onclick="continueAfterVisitSummary()" title="Saves the summary to the EHR, then continues">
+                        <span id="avsContinueLabel">Continue</span>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="9 18 15 12 9 6"/>
                         </svg>
@@ -1273,6 +1248,7 @@
 <script src="js/streaming.js"></script>
 
 <script src="js/main.js"></script>
+<script src="js/patient-data.js"></script>
 
 <!-- Patient Insights Integration -->
 <script> // nosemgrep: insecure-document-method
@@ -1309,6 +1285,27 @@
         }
     }
 
+    // Walks forward hour-by-hour from "now (in the clinic's configured timezone,
+    // window.APP_TIMEZONE — see js/config.js), ceiling to the next hour", skipping
+    // the 12:00 PM slot (standing lunch break, 12-1 PM — nobody is ever scheduled
+    // then), and returns the `index`-th valid slot as a formatted "h:00 AM/PM" string.
+    function getAppointmentTime(index) {
+        const zonedNow = window.getZonedNow ? window.getZonedNow(window.APP_TIMEZONE) : null;
+        let hour = (zonedNow ? zonedNow.hour : new Date().getHours()) + 1; // ceiling to next hour
+        let count = 0;
+        while (true) {
+            if (((hour % 24) + 24) % 24 !== 12) { // skip noon
+                if (count === index) break;
+                count++;
+            }
+            hour++;
+        }
+        let displayHour = ((hour % 24) + 24) % 24;
+        const ampm = displayHour >= 12 ? 'PM' : 'AM';
+        displayHour = displayHour % 12 || 12;
+        return `${displayHour}:00 ${ampm}`;
+    }
+
     // Update the schedule screen with real patients
     function updateScheduleUI(patients) {
         const container = document.querySelector('.schedule-container');
@@ -1324,18 +1321,17 @@
         container.innerHTML = '';
         
         // Add each patient
-        const times = ['9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM', '2:15 PM', '3:00 PM', '4:00 PM'];
         const durations = ['30 min', '45 min', '30 min', '60 min', '30 min', '45 min', '30 min'];
-        const visitTypes = ['Diabetes Follow-up', 'Annual Physical', 'BP Check', 'Wellness Visit', 'Lab Review', 'Medication Review', 'Follow-up'];
-        
+        const visitTypes = ['Monthly Follow-up', 'Annual Physical', 'Biweekly Follow-up', 'Wellness Visit', 'Lab Review', 'Medication Review', 'Follow-up'];
+
         patients.forEach((patient, index) => {
             // Use patient ID as key (guaranteed unique)
             const key = patient.id;
             const initials = (patient.given[0] || 'X') + (patient.family[0] || 'X');
-            const time = times[index % times.length];
+            const time = getAppointmentTime(index);
             const duration = durations[index % durations.length];
             const visitType = visitTypes[index % visitTypes.length];
-            
+
             // Store in maps using ID as key
             PATIENT_ID_MAP[key] = patient.id;
             PATIENT_INFO[key] = {
@@ -1344,7 +1340,8 @@
                 initials: initials,
                 age: patient.age,
                 gender: patient.gender,
-                mrn: patient.mrn
+                mrn: patient.mrn,
+                appointmentTime: time
             };
             
             const card = document.createElement('div');
@@ -1364,7 +1361,7 @@
                         <span class="separator">•</span>
                         <span>${escapeHtml(patient.gender || 'N/A')}</span>
                         <span class="separator">•</span>
-                        <span>MRN: ${escapeHtml(patient.mrn)}</span>
+                        <span>MRN: <span class="patient-mrn-value" title="${escapeHtml(patient.mrn)} (click to copy)" onclick="event.stopPropagation(); copyAvsId(this)">${escapeHtml(patient.mrn)}</span></span>
                     </div>
                 </div>
                 <div class="patient-badges">
@@ -1389,7 +1386,11 @@
 
         // Update MRN
         const mrnEl = document.getElementById('headerPatientMRN');
-        if (mrnEl) mrnEl.textContent = 'MRN: ' + info.mrn;
+        if (mrnEl) {
+            mrnEl.textContent = 'MRN: ' + info.mrn;
+            mrnEl.title = info.mrn + ' (click to copy)';
+            mrnEl.onclick = () => copyAvsId(mrnEl);
+        }
 
         // Update demographics
         const demoEl = document.getElementById('headerPatientDemo');
@@ -1400,6 +1401,11 @@
         if (avatarEl) {
             avatarEl.innerHTML = info.initials; // nosemgrep: insecure-document-method — initials are server-generated patient name initials, not user input
         }
+
+        // Refresh the header clock immediately — this header (and its static
+        // placeholder time) is hidden until a patient is opened, so without this
+        // it can show up to 30s of staleness before the next interval tick.
+        if (typeof refreshHeaderData === 'function') refreshHeaderData();
     }
 
     // Load patient insights when opening a patient
@@ -1416,11 +1422,17 @@
 
         currentPatientId = patientId;
         currentPatientKey = patientKey;
-        
+        window.currentPatientId = patientId; // exposed for js/patient-data.js
+
         console.log('Loading insights for patient:', info.name, patientId);
-        
+
         // Update header immediately
         updatePatientHeader(patientKey);
+
+        // Load Diagnoses / Vital Signs / Recent Labs from HealthLake
+        if (window.loadPatientClinicalSections) {
+            window.loadPatientClinicalSections(patientId);
+        }
         
         // Show loading indicator
         showInsightsLoading();
@@ -1594,23 +1606,49 @@
         loadPatientInsights(patientKey);
     };
 
+    // Reflects the signed-in Cognito user's name in the UI instead of the bundled
+    // "Dr. Neil Patel" placeholder. Falls back to leaving the placeholder in place
+    // when Cognito is disabled or no user info is available (e.g. local dev).
+    function updateClinicianNameFromCognito() {
+        if (!window.CognitoAuth || !CognitoAuth.isAuthenticated()) return;
+        const info = CognitoAuth.getUserInfo();
+        const displayName = info && (info.name || info.email || info.username);
+        if (!displayName) return;
+
+        const nameEls = document.querySelectorAll('.schedule-doctor-name, .user-name');
+        nameEls.forEach(el => { el.textContent = displayName; });
+
+        const avatarEl = document.querySelector('.schedule-doctor-avatar');
+        if (avatarEl) {
+            const nameWords = displayName
+                .replace(/^(Dr|Mr|Mrs|Ms|Prof)\.?\s+/i, '') // exclude a title prefix from initials, e.g. "Dr. Neil Patel" -> "NP"
+                .split(/\s+/)
+                .filter(Boolean);
+            const initials = nameWords.slice(0, 2).map(w => w[0].toUpperCase()).join('');
+            if (initials) avatarEl.textContent = initials;
+        }
+    }
+
     // Load patients when page loads
     document.addEventListener('DOMContentLoaded', function() {
         // Set today's date dynamically
         const dateEl = document.getElementById('scheduleDate');
         if (dateEl) {
             const today = new Date();
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: '2-digit' };
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: '2-digit', timeZone: window.APP_TIMEZONE };
             dateEl.textContent = today.toLocaleDateString('en-US', options);
         }
 
         // Initialize Cognito authentication (if configured with real values)
-        const cognitoConfigured = window.COGNITO_CONFIG && 
-            window.COGNITO_CONFIG.userPoolId && 
+        const cognitoConfigured = window.COGNITO_CONFIG &&
+            window.COGNITO_CONFIG.userPoolId &&
             !window.COGNITO_CONFIG.userPoolId.startsWith('YOUR_') &&
             window.CognitoAuth;
         if (cognitoConfigured) {
             CognitoAuth.init(window.COGNITO_CONFIG);
+            // Already-authenticated on reload (valid session in localStorage) — no
+            // login screen will appear/be removed, so update the name right away.
+            updateClinicianNameFromCognito();
             // Wait for login before loading patients — loadPatientsFromHealthLake
             // will be called after successful login via _onLoginSuccess path.
             // But we still need to load patients once auth completes.
@@ -1620,6 +1658,7 @@
                     for (const node of m.removedNodes) {
                         if (node.id === 'cognitoLoginScreen') {
                             observer.disconnect();
+                            updateClinicianNameFromCognito();
                             loadPatientsFromHealthLake();
                             return;
                         }

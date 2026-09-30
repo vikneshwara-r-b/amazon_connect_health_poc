@@ -145,6 +145,24 @@ window.CognitoAuth = (function() {
         return idToken;
     }
 
+    // Decodes the current ID token's claims (name, email, cognito:username, etc.)
+    // without verifying the signature — this is client-side display only, the
+    // backend independently verifies the token on every API call. Returns null
+    // when there's no token to decode.
+    function getUserInfo() {
+        if (!idToken) return null;
+        try {
+            const payload = JSON.parse(atob(idToken.split('.')[1]));
+            return {
+                name: payload.name || null,
+                email: payload.email || null,
+                username: payload['cognito:username'] || payload.email || null
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
     function isAuthenticated() {
         return idToken && Date.now() < tokenExpiry;
     }
@@ -493,6 +511,7 @@ window.CognitoAuth = (function() {
         login,
         logout,
         getToken,
+        getUserInfo,
         isAuthenticated,
         isEnabled,
         refreshSession,

@@ -24,7 +24,9 @@ from config import (
     SMS_AWS_PROFILE, SMS_REGION, SMS_ORIGINATION_NUMBER,
     DEMO_CACHE, CORS_ORIGINS,
     SERVER_HOST, SERVER_PORT, DEBUG,
-    BEDROCK_MODEL_ID, BEDROCK_REGION, BEDROCK_MAX_TOKENS
+    BEDROCK_MODEL_ID, BEDROCK_REGION, BEDROCK_MAX_TOKENS,
+    COMPREHEND_MEDICAL_REGION, COMPREHEND_MEDICAL_ICD10_MIN_SCORE,
+    MEDICAL_CODES_PROVIDER
 )
 from demo_mode import is_demo_request, get_cached_response, save_to_cache, DEMO_RECORD
 from auth import init_auth
@@ -75,6 +77,95 @@ def serve_static(path):
     """Serve static files from frontend."""
     return send_from_directory(app.static_folder, path)
 
+def _healthlake_request(path_and_query, method='GET', body=None, timeout=15):
+    """SigV4-signed request against the HealthLake FHIR REST API. Returns the raw requests.Response.
+
+    `path_and_query` is appended directly after the datastore's /r4/ base — callers are
+    responsible for allowlisting/validating any user-supplied segments before calling this.
+    `body`, when given, is a dict serialized as the FHIR resource JSON for POST/PUT writes —
+    it's signed and sent as the exact same bytes (SigV4 signs the request body, so the two
+    must never diverge).
+    """
+    if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
+        session = boto3.Session(profile_name=AWS_PROFILE)
+    else:
+        session = boto3.Session()
+    credentials = session.get_credentials()
+
+    url = f"https://healthlake.{AWS_REGION}.amazonaws.com/datastore/{HEALTHLAKE_DATASTORE_ID}/r4/{path_and_query}"
+
+    from botocore.auth import SigV4Auth
+    from botocore.awsrequest import AWSRequest
+    import requests as req_lib
+
+    headers = {'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json'}
+    data = json.dumps(body) if body is not None else None
+    aws_req = AWSRequest(method=method, url=url, headers=headers, data=data)
+    SigV4Auth(credentials, 'healthlake', AWS_REGION).add_auth(aws_req)
+
+    return req_lib.request(method, url, headers=dict(aws_req.headers), data=data, timeout=timeout)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, path is built only from allowlisted/regex-validated segments by callers
+
+
+def _extract_condition_fields(resource):
+    """Shared Condition field extraction, used for both single-GET and search-result rows."""
+    meta = {}
+    code = resource.get("code", {})
+    meta["name"] = code.get("text") or (code.get("coding", [{}])[0].get("display") if code.get("coding") else None) or "Unknown"
+    if code.get("coding"):
+        meta["code"] = code["coding"][0].get("code", "")
+        meta["codeSystem"] = code["coding"][0].get("system", "")
+    meta["clinicalStatus"] = resource.get("clinicalStatus", {}).get("coding", [{}])[0].get("code", "")
+    onset = resource.get("onsetDateTime") or resource.get("onsetPeriod", {}).get("start")
+    if onset:
+        meta["onsetDate"] = onset
+    return meta
+
+
+def _extract_medication_fields(resource):
+    """Shared MedicationRequest field extraction, used for both single-GET and evidence-lookup rows."""
+    meta = {}
+    med = resource.get("medicationCodeableConcept", {})
+    meta["name"] = med.get("text") or (med.get("coding", [{}])[0].get("display") if med.get("coding") else None) or "Unknown"
+    # NDC code
+    if med.get("coding"):
+        meta["code"] = med["coding"][0].get("code", "")
+        meta["codeSystem"] = med["coding"][0].get("system", "")
+    dosage = resource.get("dosageInstruction", [{}])
+    if dosage and isinstance(dosage, list) and len(dosage) > 0:
+        meta["dosage"] = dosage[0].get("text", "")
+        route = dosage[0].get("route", {})
+        if route.get("coding"):
+            meta["route"] = route["coding"][0].get("code", "")
+    # Dispense details
+    dispense = resource.get("dispenseRequest", {})
+    if dispense.get("quantity", {}).get("value") is not None:
+        meta["quantity"] = dispense["quantity"]["value"]
+    if "numberOfRepeatsAllowed" in dispense:
+        meta["refills"] = dispense["numberOfRepeatsAllowed"]
+    meta["status"] = resource.get("status")
+    meta["date"] = resource.get("authoredOn")
+    return meta
+
+
+def _extract_observation_fields(resource):
+    """Shared Observation field extraction, used for both single-GET and search-result rows."""
+    meta = {}
+    code = resource.get("code", {})
+    meta["name"] = code.get("text") or (code.get("coding", [{}])[0].get("display") if code.get("coding") else None) or "Unknown"
+    if code.get("coding"):
+        meta["code"] = code["coding"][0].get("code", "")
+        meta["codeSystem"] = code["coding"][0].get("system", "")
+    vq = resource.get("valueQuantity", {})
+    if vq:
+        meta["value"] = vq.get("value")
+        meta["unit"] = vq.get("unit", "")
+    cat = resource.get("category", [{}])[0].get("coding", [{}])[0].get("code", "")
+    meta["category"] = cat
+    meta["date"] = resource.get("effectiveDateTime") or resource.get("effectivePeriod", {}).get("start")
+    meta["status"] = resource.get("status")
+    return meta
+
+
 # Global client instance
 _client = None
 
@@ -115,26 +206,7 @@ def list_patients():
             return jsonify(cached)
 
     try:
-        # In ECS, use default credentials (IAM role). Locally, use profile if set.
-        if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
-            session = boto3.Session(profile_name=AWS_PROFILE)
-        else:
-            session = boto3.Session()
-        credentials = session.get_credentials()
-        
-        # Build HealthLake URL
-        url = f"https://healthlake.{AWS_REGION}.amazonaws.com/datastore/{HEALTHLAKE_DATASTORE_ID}/r4/Patient?_count=100"
-        
-        # Sign the request
-        from botocore.auth import SigV4Auth
-        from botocore.awsrequest import AWSRequest
-        import requests
-        
-        headers = {'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json'}
-        request = AWSRequest(method='GET', url=url, headers=headers)
-        SigV4Auth(credentials, 'healthlake', AWS_REGION).add_auth(request)
-        
-        response = requests.get(url, headers=dict(request.headers), timeout=30)  # nosemgrep: use-raise-for-status — non-200 responses are handled by bundle.get() returning empty, surfaced as empty patient list
+        response = _healthlake_request("Patient?_count=100", timeout=30)  # nosemgrep: use-raise-for-status — non-200 responses are handled by bundle.get() returning empty, surfaced as empty patient list
         bundle = response.json()
         
         patients = []
@@ -163,7 +235,7 @@ def list_patients():
                 'gender': patient.get('gender', '').capitalize(),
                 'birthDate': birth_date,
                 'age': age,
-                'mrn': patient['id'][:8]
+                'mrn': patient['id']
             })
         
         return jsonify({
@@ -194,6 +266,71 @@ def echo():
 
 
 # =============================================================================
+# MEDICAL CODING FALLBACK — Comprehend Medical (ICD-10)
+# =============================================================================
+# health-agent:GenerateMedicalCodes is a gated preview feature (see CLAUDE.md)
+# and errors out on accounts without access. This fallback derives ICD-10 codes
+# a different way: Comprehend Medical's InferICD10CM gives grounded, non-generative
+# ICD-10-CM codes (ontology lookup against the real CDC code set, so it can't
+# hallucinate a nonexistent code). Pattern (confidence-score filtering) follows
+# AWS's own guidance:
+# https://docs.aws.amazon.com/prescriptive-guidance/latest/generative-ai-nlp-healthcare/comprehend-medical-rag.html
+#
+# No CPT/E&M fallback here (previously a narrow Bedrock classification over a
+# fixed outpatient E&M table) -- intentionally removed, not just gated off, per
+# this app's config: only ICD-10 is generated when GenerateMedicalCodes is
+# unavailable. CPT itself is also AMA-copyrighted content this app has no
+# license for, so it was never going to cover general CPT codes either way.
+
+
+def _infer_icd10_codes_with_comprehend_medical(text, session):
+    """Ontology-linked ICD-10-CM codes for entities detected in the clinical
+    text -- deterministic lookup against the CDC ICD-10-CM knowledge base, not
+    an LLM, so no hallucination risk. One candidate (the top-scored concept) per
+    detected entity, filtered to COMPREHEND_MEDICAL_ICD10_MIN_SCORE -- low-
+    confidence ICD-10 is dropped entirely rather than shown to a clinician."""
+    client = session.client('comprehendmedical', region_name=COMPREHEND_MEDICAL_REGION)
+    response = client.infer_icd10_cm(Text=text)
+    # Keyed by code: the same term (e.g. "cough") often appears as a separate
+    # entity per mention in the text, each independently top-matching the same
+    # ICD-10-CM code -- collapse those into one entry (highest-confidence
+    # instance) rather than showing the same code repeated in the UI.
+    by_code = {}
+    for entity in response.get('Entities', []):
+        if entity.get('Score', 0) < COMPREHEND_MEDICAL_ICD10_MIN_SCORE:
+            continue
+        concepts = [c for c in entity.get('ICD10CMConcepts', []) if c.get('Score', 0) >= COMPREHEND_MEDICAL_ICD10_MIN_SCORE]
+        if not concepts:
+            continue
+        top = max(concepts, key=lambda c: c.get('Score', 0))
+        existing = by_code.get(top['Code'])
+        if existing and existing['confidence'] >= round(top['Score'], 4):
+            continue
+        by_code[top['Code']] = {
+            "name": top['Code'],
+            "system": "ICD10",
+            "description": top['Description'],
+            "confidence": round(top['Score'], 4),
+            "evidence": [{"text": entity.get('Text', '')}],
+        }
+    return list(by_code.values())
+
+
+def _generate_medical_codes_fallback(text):
+    """Comprehend Medical (ICD-10 only) -- used when health-agent:
+    GenerateMedicalCodes isn't available. Returns the same {name, system,
+    description, confidence, evidence} shape GenerateMedicalCodes returns, so
+    callers don't need to know which path produced the codes. No CPT/E&M
+    fallback (see module comment above) -- deliberately ICD-10 only."""
+    if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
+        session = boto3.Session(profile_name=AWS_PROFILE)
+    else:
+        session = boto3.Session()
+
+    return _infer_icd10_codes_with_comprehend_medical(text, session)
+
+
+# =============================================================================
 # GENERATE MEDICAL CODES API
 # =============================================================================
 
@@ -202,9 +339,13 @@ def generate_medical_codes():
     """
     Generate ICD10/CPT codes from clinical text.
     
-    Request body:
+    Request body -- either 'text' (used verbatim, e.g. clinician-edited notes)
+    or 'sessionId' (backend reads clinicalDoc.json from S3 and flattens it
+    itself, so the caller doesn't need to have already fetched/rendered the
+    note first):
     {
-        "text": "Clinical encounter text...",
+        "text": "Clinical encounter text...",       // OR:
+        "sessionId": "<streaming session id>",
         "patientContext": {
             "dateOfBirth": "1965-03-15T00:00:00Z",
             "sex": "MALE" | "FEMALE",
@@ -218,9 +359,9 @@ def generate_medical_codes():
     """
     try:
         data = request.get_json()
-        
-        if not data or 'text' not in data:
-            return jsonify({"success": False, "error": "Missing 'text' field"}), 400
+
+        if not data or ('text' not in data and 'sessionId' not in data):
+            return jsonify({"success": False, "error": "Missing 'text' or 'sessionId' field"}), 400
 
         # Demo mode: return cached medical codes from streaming outputs
         if is_demo_request():
@@ -228,14 +369,39 @@ def generate_medical_codes():
             if cached and cached.get('outputs', {}).get('medicalCodes'):
                 return jsonify({"success": True, "medicalCodes": cached['outputs']['medicalCodes'].get('medicalCodes', [])})
 
+        if 'text' in data:
+            text = data['text']
+        else:
+            # sessionId mode: read clinicalDoc.json from S3 directly instead of
+            # requiring the frontend to have fetched+rendered it into the DOM
+            # first and scraped it back out -- removes a round trip and a
+            # dependency on UI render state that has nothing to do with
+            # whether the note actually exists yet.
+            clinical_doc = _fetch_clinical_doc_from_s3(data['sessionId'])
+            text = _flatten_clinical_doc_text(clinical_doc) if clinical_doc else ''
+            if not text:
+                return jsonify({"success": False, "error": "clinical_doc_not_ready"}), 404
+
+        # MEDICAL_CODES_PROVIDER feature flag (see config.py): "comprehend-medical"
+        # skips GenerateMedicalCodes entirely -- no point calling an API already known
+        # to be unavailable.
+        if MEDICAL_CODES_PROVIDER == "comprehend-medical":
+            print("[MedicalCodes] MEDICAL_CODES_PROVIDER=comprehend-medical, skipping GenerateMedicalCodes")
+            codes = _generate_medical_codes_fallback(text)
+            return jsonify({
+                "success": True,
+                "medicalCodes": codes,
+                "fallback": "comprehend-medical",
+            })
+
         client = get_client()
-        
+
         # Build request — domainId required for HealthAgent GA
         request_params = {
             "domainId": DOMAIN_ID,
-            "text": data['text']
+            "text": text
         }
-        
+
         if 'patientContext' in data:
             pc = data['patientContext']
             # Remove dateOfBirth — the service model serializes it as a full ISO timestamp
@@ -243,21 +409,46 @@ def generate_medical_codes():
             pc.pop('dateOfBirth', None)
             if pc:  # only include if there are remaining fields
                 request_params['patientContext'] = pc
-        
+
         if 'encounterContext' in data:
             request_params['encounterContext'] = data['encounterContext']
-        
+
         # Call API
         print(f"[DEBUG] GenerateMedicalCodes request_params keys: {list(request_params.keys())}")
         if 'patientContext' in request_params:
             print(f"[DEBUG] patientContext: {request_params['patientContext']}")
-        response = client.generate_medical_codes(**request_params)
-        
-        return jsonify({
-            "success": True,
-            "medicalCodes": response.get('medicalCodes', [])
-        })
-        
+
+        # MEDICAL_CODES_PROVIDER=connect-health: no fallback -- surface the real
+        # error so gated-access status is visible instead of masked.
+        if MEDICAL_CODES_PROVIDER == "connect-health":
+            response = client.generate_medical_codes(**request_params)
+            return jsonify({
+                "success": True,
+                "medicalCodes": response.get('medicalCodes', [])
+            })
+
+        # Default ("auto"): try GenerateMedicalCodes, fall back on any failure.
+        try:
+            response = client.generate_medical_codes(**request_params)
+            return jsonify({
+                "success": True,
+                "medicalCodes": response.get('medicalCodes', [])
+            })
+        except Exception as e:
+            # health-agent:GenerateMedicalCodes is a gated preview feature (see
+            # CLAUDE.md) -- most accounts hit AccessDenied/ValidationException
+            # here. Fall back to Comprehend Medical (ICD-10 only) rather than
+            # surfacing an error, same "labeled fallback" pattern this app
+            # already uses for the previsit narrative when gated features
+            # aren't available.
+            print(f"[MedicalCodes] GenerateMedicalCodes unavailable ({e}), falling back to Comprehend Medical (ICD-10 only)")
+            codes = _generate_medical_codes_fallback(text)
+            return jsonify({
+                "success": True,
+                "medicalCodes": codes,
+                "fallback": "comprehend-medical",
+            })
+
     except Exception as e:
         return _safe_error(e, "generate_medical_codes")
 
@@ -632,26 +823,8 @@ def get_fhir_resource(resource_type, resource_id):
     # SSRF mitigation: host is a fixed HealthLake endpoint, not user-controlled.
     # Only resource_type (allowlisted above) and resource_id (regex-validated above)
     # are interpolated into the path. The scheme is always HTTPS.
-    HEALTHLAKE_BASE_URL = f"https://healthlake.{AWS_REGION}.amazonaws.com/datastore/{HEALTHLAKE_DATASTORE_ID}/r4"
-
     try:
-        if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
-            session = boto3.Session(profile_name=AWS_PROFILE)
-        else:
-            session = boto3.Session()
-        credentials = session.get_credentials()
-
-        url = f"{HEALTHLAKE_BASE_URL}/{resource_type}/{resource_id}"
-
-        from botocore.auth import SigV4Auth
-        from botocore.awsrequest import AWSRequest
-        import requests as req_lib
-
-        headers = {'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json'}
-        aws_req = AWSRequest(method='GET', url=url, headers=headers)
-        SigV4Auth(credentials, 'healthlake', AWS_REGION).add_auth(aws_req)
-
-        response = req_lib.get(url, headers=dict(aws_req.headers), timeout=15)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, resource_type is allowlisted, resource_id is regex-validated
+        response = _healthlake_request(f"{resource_type}/{resource_id}")  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, resource_type is allowlisted, resource_id is regex-validated
         if response.status_code != 200:
             return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
 
@@ -667,48 +840,15 @@ def get_fhir_resource(resource_type, resource_id):
 
         # Observation: test name, value, unit
         if resource_type == "Observation":
-            code = resource.get("code", {})
-            meta["name"] = code.get("text") or (code.get("coding", [{}])[0].get("display") if code.get("coding") else None) or "Unknown"
-            vq = resource.get("valueQuantity", {})
-            if vq:
-                meta["value"] = vq.get("value")
-                meta["unit"] = vq.get("unit", "")
-            cat = resource.get("category", [{}])[0].get("coding", [{}])[0].get("code", "")
-            meta["category"] = cat
+            meta.update(_extract_observation_fields(resource))
 
         # MedicationRequest
         elif resource_type == "MedicationRequest":
-            med = resource.get("medicationCodeableConcept", {})
-            meta["name"] = med.get("text") or (med.get("coding", [{}])[0].get("display") if med.get("coding") else None) or "Unknown"
-            # NDC code
-            if med.get("coding"):
-                meta["code"] = med["coding"][0].get("code", "")
-                meta["codeSystem"] = med["coding"][0].get("system", "")
-            dosage = resource.get("dosageInstruction", [{}])
-            if dosage and isinstance(dosage, list) and len(dosage) > 0:
-                meta["dosage"] = dosage[0].get("text", "")
-                route = dosage[0].get("route", {})
-                if route.get("coding"):
-                    meta["route"] = route["coding"][0].get("code", "")
-            # Dispense details
-            dispense = resource.get("dispenseRequest", {})
-            if dispense.get("quantity", {}).get("value") is not None:
-                meta["quantity"] = dispense["quantity"]["value"]
-            if "numberOfRepeatsAllowed" in dispense:
-                meta["refills"] = dispense["numberOfRepeatsAllowed"]
+            meta.update(_extract_medication_fields(resource))
 
         # Condition
         elif resource_type == "Condition":
-            code = resource.get("code", {})
-            meta["name"] = code.get("text") or (code.get("coding", [{}])[0].get("display") if code.get("coding") else None) or "Unknown"
-            if code.get("coding"):
-                meta["code"] = code["coding"][0].get("code", "")
-                meta["codeSystem"] = code["coding"][0].get("system", "")
-            meta["clinicalStatus"] = resource.get("clinicalStatus", {}).get("coding", [{}])[0].get("code", "")
-            # Onset date
-            onset = resource.get("onsetDateTime") or resource.get("onsetPeriod", {}).get("start")
-            if onset:
-                meta["onsetDate"] = onset
+            meta.update(_extract_condition_fields(resource))
 
         # DiagnosticReport
         elif resource_type == "DiagnosticReport":
@@ -764,6 +904,279 @@ def get_fhir_resource(resource_type, resource_id):
         return _safe_error(e, "get_fhir_resource")
 
 
+@app.route('/api/fhir/patient/<patient_id>/summary', methods=['GET'])
+def get_patient_fhir_summary(patient_id):
+    """Patient-scoped FHIR search: Diagnoses (Condition), Vital Signs / Labs (Observation).
+
+    Backs the Patient Portal's Diagnoses/Vital Signs/Recent Labs panels and the
+    Lab results tab — the frontend requests a large `_count` once and slices
+    client-side for the "recent" view vs the full-history tab.
+    """
+    import re
+
+    # SSRF mitigation: validate patient_id is alphanumeric/hyphens only, same as resource_id above
+    if not re.match(r'^[a-zA-Z0-9\-]+$', patient_id):
+        return jsonify({"success": False, "error": "Invalid patient ID"}), 400
+
+    SECTION_RESOURCE = {"diagnoses": "Condition", "vitals": "Observation", "labs": "Observation"}
+    SECTION_SHORT = {"diagnoses": "dx", "vitals": "vital", "labs": "lab"}
+    section = request.args.get('section', '')
+    if section not in SECTION_RESOURCE:
+        return jsonify({"success": False, "error": "Invalid section"}), 400
+
+    try:
+        count = int(request.args.get('_count', 100))
+    except ValueError:
+        count = 100
+    # HealthLake's FHIR search API rejects _count > 100 with a 400.
+    count = max(1, min(count, 100))
+
+    section_short = SECTION_SHORT[section]
+
+    # Demo mode: return cached response for this patient+section
+    if is_demo_request():
+        cached = get_cached_response('fhir_patient_summary', f"{patient_id[:8]}_{section_short}")
+        if cached:
+            return jsonify(cached)
+
+    resource_type = SECTION_RESOURCE[section]
+    if resource_type == "Condition":
+        query = f"Condition?patient={patient_id}&_count={count}&_sort=-recorded-date&_total=accurate"
+    else:
+        category = "vital-signs" if section == "vitals" else "laboratory"
+        query = f"Observation?patient={patient_id}&category={category}&_sort=-date&_count={count}&_total=accurate"
+
+    try:
+        response = _healthlake_request(query)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, patient_id is regex-validated, section/resource_type/category are allowlisted
+        if response.status_code != 200:
+            return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
+
+        bundle = response.json()
+        results = []
+        for entry in bundle.get('entry', []):
+            resource = entry.get('resource', {})
+            fields = _extract_condition_fields(resource) if resource_type == "Condition" else _extract_observation_fields(resource)
+            fields['id'] = resource.get('id', '')
+            results.append(fields)
+
+        response_data = {
+            "success": True,
+            "section": section,
+            "patientId": patient_id,
+            "count": len(results),
+            "totalAvailable": bundle.get('total', len(results)),
+            "results": results
+        }
+
+        if DEMO_RECORD:
+            save_to_cache('fhir_patient_summary', f"{patient_id[:8]}_{section_short}", response_data)
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        return _safe_error(e, "get_patient_fhir_summary")
+
+
+@app.route('/api/fhir/patient/<patient_id>/resources', methods=['GET'])
+def get_patient_fhir_resources(patient_id):
+    """Compact list of a patient's Observation/MedicationRequest/Condition/Encounter resources.
+
+    The Patient Insights job cites evidence with its own sequential IDs (e.g.
+    "Observation/14"), not HealthLake IDs, so the pre-visit page can't resolve them
+    directly — it matches the cited narrative text against this list instead.
+    """
+    import re
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not re.match(r'^[a-zA-Z0-9\-]+$', patient_id):
+        return jsonify({"success": False, "error": "Invalid patient ID"}), 400
+
+    # Demo cache references the original datastore's IDs; nothing to resolve against here.
+    if is_demo_request():
+        return jsonify({"success": False, "error": "Not available in demo mode"})
+
+    resource_types = ["Observation", "MedicationRequest", "Condition", "Encounter"]
+
+    def fetch(resource_type):
+        query = f"{resource_type}?patient={patient_id}&_count=100"
+        response = _healthlake_request(query)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, patient_id is regex-validated, resource_type is from a fixed list
+        if response.status_code != 200:
+            raise RuntimeError(f"HealthLake returned {response.status_code} for {resource_type}")
+        rows = []
+        for entry in response.json().get('entry', []):
+            resource = entry.get('resource', {})
+            if resource_type == "Observation":
+                fields = _extract_observation_fields(resource)
+            elif resource_type == "MedicationRequest":
+                fields = _extract_medication_fields(resource)
+            elif resource_type == "Condition":
+                fields = _extract_condition_fields(resource)
+            else:
+                fields = {"date": resource.get("period", {}).get("start"), "status": resource.get("status")}
+            fields['id'] = resource.get('id', '')
+            rows.append(fields)
+        return resource_type, rows
+
+    try:
+        with ThreadPoolExecutor(max_workers=len(resource_types)) as pool:
+            results = dict(pool.map(fetch, resource_types))
+        return jsonify({"success": True, "patientId": patient_id, "resources": results})
+    except Exception as e:
+        return _safe_error(e, "get_patient_fhir_resources")
+
+
+@app.route('/api/streaming/session/start', methods=['POST'])
+def start_streaming_session():
+    """Create a FHIR Encounter in HealthLake linking a new consultation session to
+    its patient, before the frontend opens the streaming WebSocket. Sessions have
+    no other durable link to a patient — the Encounter's identifier ties it back
+    to the S3 session data by sessionId.
+    """
+    import re
+    from datetime import datetime, timezone
+
+    data = request.get_json(silent=True) or {}
+    patient_id = data.get('patientId', '')
+    session_id = data.get('sessionId', '')
+
+    if not re.match(r'^[a-zA-Z0-9\-]+$', patient_id):
+        return jsonify({"success": False, "error": "Invalid patient ID"}), 400
+    if not session_id or not re.match(r'^[a-zA-Z0-9\-]+$', session_id):
+        return jsonify({"success": False, "error": "Invalid session ID"}), 400
+
+    # Demo mode / writes never hit AWS — return a synthetic id so the frontend flow
+    # works identically, but nothing is actually written anywhere.
+    if is_demo_request():
+        return jsonify({"success": True, "encounterId": f"demo-encounter-{session_id[:8]}"})
+
+    encounter = {
+        "resourceType": "Encounter",
+        "status": "in-progress",
+        "class": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "AMB",
+            "display": "ambulatory"
+        },
+        "subject": {"reference": f"Patient/{patient_id}"},
+        "period": {"start": datetime.now(timezone.utc).isoformat()},
+        "identifier": [{"system": "urn:connect-health:session-id", "value": session_id}]
+    }
+
+    try:
+        response = _healthlake_request("Encounter", method='POST', body=encounter)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, patient_id/session_id are regex-validated
+        if response.status_code not in (200, 201):
+            return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
+
+        created = response.json()
+        return jsonify({"success": True, "encounterId": created.get('id')})
+
+    except Exception as e:
+        return _safe_error(e, "start_streaming_session")
+
+
+# kind -> (LOINC code, display) for DocumentReference.type
+DOCUMENT_KINDS = {
+    "soap": ("34117-2", "History and physical note"),
+    "avs": ("69730-0", "Instructions"),
+}
+
+
+@app.route('/api/fhir/patient/<patient_id>/document-reference', methods=['POST'])
+def create_document_reference(patient_id):
+    """Write an approved SOAP note (kind="soap", default) or After Visit Summary
+    (kind="avs") back to HealthLake as a FHIR DocumentReference, optionally linked to
+    the Encounter created at session start.
+    """
+    import re
+    import base64
+    from datetime import datetime, timezone
+
+    if not re.match(r'^[a-zA-Z0-9\-]+$', patient_id):
+        return jsonify({"success": False, "error": "Invalid patient ID"}), 400
+
+    data = request.get_json(silent=True) or {}
+    content = data.get('content', '')
+    encounter_id = data.get('encounterId', '')
+    kind = data.get('kind', 'soap')
+
+    if kind not in DOCUMENT_KINDS:
+        return jsonify({"success": False, "error": "Invalid kind"}), 400
+    if not content or not content.strip():
+        return jsonify({"success": False, "error": "content is required"}), 400
+    if encounter_id and not re.match(r'^[a-zA-Z0-9\-]+$', encounter_id):
+        return jsonify({"success": False, "error": "Invalid encounter ID"}), 400
+
+    if is_demo_request():
+        return jsonify({"success": True, "documentReferenceId": f"demo-docref-{patient_id[:8]}"})
+
+    loinc_code, loinc_display = DOCUMENT_KINDS[kind]
+    document_reference = {
+        "resourceType": "DocumentReference",
+        "status": "current",
+        "type": {
+            "coding": [{
+                "system": "http://loinc.org",
+                "code": loinc_code,
+                "display": loinc_display
+            }]
+        },
+        "subject": {"reference": f"Patient/{patient_id}"},
+        "date": datetime.now(timezone.utc).isoformat(),
+        "content": [{
+            "attachment": {
+                "contentType": "text/plain",
+                "data": base64.b64encode(content.encode('utf-8')).decode('ascii')
+            }
+        }]
+    }
+    if encounter_id:
+        document_reference["context"] = {"encounter": [{"reference": f"Encounter/{encounter_id}"}]}
+
+    try:
+        response = _healthlake_request("DocumentReference", method='POST', body=document_reference)  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, patient_id/encounter_id are regex-validated
+        if response.status_code not in (200, 201):
+            return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
+
+        created = response.json()
+        return jsonify({"success": True, "documentReferenceId": created.get('id')})
+
+    except Exception as e:
+        return _safe_error(e, "create_document_reference")
+
+
+@app.route('/api/fhir/encounter/<encounter_id>/finish', methods=['POST'])
+def finish_encounter(encounter_id):
+    """Mark a session Encounter as finished with an end time (it is created
+    in-progress at consultation start and otherwise never closed)."""
+    import re
+    from datetime import datetime, timezone
+
+    if not re.match(r'^[a-zA-Z0-9\-]+$', encounter_id):
+        return jsonify({"success": False, "error": "Invalid encounter ID"}), 400
+
+    if is_demo_request():
+        return jsonify({"success": True, "encounterId": encounter_id})
+
+    try:
+        response = _healthlake_request(f"Encounter/{encounter_id}")  # nosemgrep: ssrf-requests — URL host is fixed HealthLake endpoint, encounter_id is regex-validated
+        if response.status_code != 200:
+            return jsonify({"success": False, "error": f"HealthLake returned {response.status_code}"}), response.status_code
+
+        encounter = response.json()
+        encounter["status"] = "finished"
+        period = encounter.get("period") or {}
+        period["end"] = datetime.now(timezone.utc).isoformat()
+        encounter["period"] = period
+
+        update = _healthlake_request(f"Encounter/{encounter_id}", method='PUT', body=encounter)  # nosemgrep: ssrf-requests — same fixed host, regex-validated id
+        if update.status_code not in (200, 201):
+            return jsonify({"success": False, "error": f"HealthLake returned {update.status_code}"}), update.status_code
+        return jsonify({"success": True, "encounterId": encounter_id})
+
+    except Exception as e:
+        return _safe_error(e, "finish_encounter")
+
+
 # =============================================================================
 # STREAMING SESSION OUTPUT APIs
 # =============================================================================
@@ -787,6 +1200,49 @@ def _find_clinical_notes_prefix(s3, session_id):
     except Exception as e:
         print(f"[S3] Error discovering prefix for {session_id}: {e}")
     return None
+
+
+def _fetch_clinical_doc_from_s3(session_id):
+    """Direct S3 read of clinicalDoc.json for a session -- same lookup GET
+    /outputs uses, factored out so /api/medical-codes's sessionId mode doesn't
+    need the frontend to have already fetched+rendered the note first. Returns
+    the parsed dict, or None if the note isn't written yet (not an error --
+    AWS's post-stream pipeline may still be running)."""
+    if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
+        session = boto3.Session(profile_name=AWS_PROFILE)
+    else:
+        session = boto3.Session()
+    s3 = session.client('s3', region_name=STREAMING_OUTPUT_REGION)
+
+    base_prefix = _find_clinical_notes_prefix(s3, session_id)
+    if not base_prefix:
+        return None
+    try:
+        response = s3.get_object(Bucket=STREAMING_OUTPUT_BUCKET, Key=base_prefix + 'clinicalDoc.json')
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except s3.exceptions.NoSuchKey:
+        return None
+
+
+def _flatten_clinical_doc_text(clinical_doc):
+    """Plain-text clinical content from a clinicalDoc.json dict, for feeding to
+    Comprehend Medical/Bedrock. Unlike frontend/js/main.js's displayClinicalDoc()
+    (which buckets sections into Subjective/Objective/Assessment/Plan headings
+    purely for on-screen layout), entity detection doesn't care about that
+    organization -- this just concatenates every section's text in document
+    order. Returns '' for an unrecognized/empty shape; callers treat that the
+    same as "no text to generate codes from"."""
+    if not clinical_doc:
+        return ''
+    sections = (clinical_doc.get('ClinicalDocumentation') or {}).get('Sections') or []
+    parts = []
+    for section in sections:
+        for seg in section.get('Summary') or []:
+            text = seg.get('SummarizedSegment')
+            if text:
+                parts.append(text)
+    return '\n\n'.join(parts)
+
 
 @app.route('/api/streaming/session/<session_id>/outputs', methods=['GET'])
 def get_streaming_session_outputs(session_id):
@@ -938,16 +1394,27 @@ def get_streaming_medical_codes(session_id):
             s3_key = post_stream_prefix + "medical-codes/medicalCodes.json"
             response = s3.get_object(Bucket=STREAMING_OUTPUT_BUCKET, Key=s3_key)
         except s3.exceptions.NoSuchKey:
-            s3_key = base_prefix + "medicalCodes.json"
-            response = s3.get_object(Bucket=STREAMING_OUTPUT_BUCKET, Key=s3_key)
+            try:
+                s3_key = base_prefix + "medicalCodes.json"
+                response = s3.get_object(Bucket=STREAMING_OUTPUT_BUCKET, Key=s3_key)
+            except s3.exceptions.NoSuchKey:
+                # Neither location has it: AWS's post-stream medical-coding pipeline
+                # never wrote one for this session (expected while
+                # health-agent:GenerateMedicalCodes is a gated preview feature --
+                # see CLAUDE.md), not a server error. The frontend's polling loop
+                # (fetchMedicalCodesOnly in main.js) already treats a non-success
+                # response as "not ready yet" and retries, then falls back to
+                # POST /api/medical-codes -- this only fixes the status code and
+                # stops flooding the logs with tracebacks for an expected case.
+                return jsonify({"success": False, "error": "Medical codes were not generated for this session"}), 404
         content = response['Body'].read().decode('utf-8')
-        
+
         return jsonify({
             "success": True,
             "sessionId": session_id,
             "medicalCodes": json.loads(content)
         })
-        
+
     except Exception as e:
         return _safe_error(e, "get_streaming_medical_codes")
 

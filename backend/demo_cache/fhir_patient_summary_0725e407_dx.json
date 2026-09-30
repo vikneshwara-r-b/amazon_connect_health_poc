@@ -1,0 +1,65 @@
+{
+  "success": true,
+  "section": "diagnoses",
+  "patientId": "0725e4075c0a604253ba23c24746cc8dea085e10cc6e9a51c309619a1d65137a",
+  "count": 7,
+  "totalAvailable": 7,
+  "results": [
+    {
+      "id": "",
+      "name": "Essential hypertension",
+      "code": "59621000",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2025-11-01"
+    },
+    {
+      "id": "",
+      "name": "Hyperlipidemia, unspecified",
+      "code": "55822004",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2025-07-18"
+    },
+    {
+      "id": "",
+      "name": "Obstructive sleep apnea",
+      "code": "78275009",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2024-09-20"
+    },
+    {
+      "id": "",
+      "name": "Arthropathic psoriasis, unspecified",
+      "code": "48440000",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2022-06-01"
+    },
+    {
+      "id": "",
+      "name": "Asymptomatic menopausal state",
+      "code": "198436008",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2021-01-01"
+    },
+    {
+      "id": "",
+      "name": "Bilateral primary osteoarthritis of knee",
+      "code": "239873007",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2019-04-10"
+    },
+    {
+      "id": "",
+      "name": "Morbid obesity due to excess calories",
+      "code": "414916001",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2019-04-10"
+    }
+  ]
+}

@@ -59,6 +59,33 @@ BEDROCK_REGION = os.environ.get("BEDROCK_REGION", "us-east-1")
 BEDROCK_MAX_TOKENS = int(os.environ.get("BEDROCK_MAX_TOKENS", "2048"))
 
 # =============================================================================
+# Medical Coding fallback — Comprehend Medical (ICD-10 only)
+# =============================================================================
+# Used when health-agent:GenerateMedicalCodes 500s/denies (it's a gated preview
+# feature -- see CLAUDE.md). No CPT/E&M fallback -- ICD-10 only, deliberately
+# (see backend/server.py's module comment for why).
+COMPREHEND_MEDICAL_REGION = os.environ.get("COMPREHEND_MEDICAL_REGION", "us-east-1")
+# ICD-10 codes below this score are dropped entirely (not shown anywhere in the
+# UI, not just demoted).
+COMPREHEND_MEDICAL_ICD10_MIN_SCORE = float(os.environ.get("COMPREHEND_MEDICAL_ICD10_MIN_SCORE", "0.5"))
+
+# Which provider POST /api/medical-codes uses:
+#   auto                (default) try GenerateMedicalCodes first, fall back
+#                        to Comprehend Medical (ICD-10 only) if it fails.
+#   connect-health       GenerateMedicalCodes only -- surfaces its real error
+#                        instead of masking it with a fallback (useful for
+#                        confirming whether gated access has been granted).
+#   comprehend-medical   Skip GenerateMedicalCodes entirely and always use
+#                        the ICD-10 fallback (useful once you know
+#                        GenerateMedicalCodes is unavailable).
+# Set via `-c medicalCodesProvider=...` at deploy time (see cdk.json/README.md) or
+# the MEDICAL_CODES_PROVIDER env var directly for local dev.
+MEDICAL_CODES_PROVIDER = os.environ.get("MEDICAL_CODES_PROVIDER", "auto").strip().lower()
+if MEDICAL_CODES_PROVIDER not in ("auto", "connect-health", "comprehend-medical"):
+    print(f"[config] Unrecognized MEDICAL_CODES_PROVIDER={MEDICAL_CODES_PROVIDER!r}, defaulting to 'auto'")
+    MEDICAL_CODES_PROVIDER = "auto"
+
+# =============================================================================
 # Demo Mode - Cached S3 paths (patient_id -> s3_uri)
 # After running Patient Insights jobs, add the output S3 URIs here to skip
 # re-running jobs on every page load. Format:

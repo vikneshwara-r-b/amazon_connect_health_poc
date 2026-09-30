@@ -10,6 +10,7 @@ from aws_cdk import (
     aws_elasticloadbalancingv2 as elbv2,
     aws_iam as iam,
     aws_logs as logs,
+    aws_ssm as ssm,
 )
 from constructs import Construct
 
@@ -39,14 +40,23 @@ class StreamingStack(Stack):
         vpc: ec2.IVpc,
         environment: str = "dev",
         output_bucket_uri: str,
-        domain_id: str = "",
-        subscription_id: str = "",
         streaming_endpoint: str = "https://streaming.health-agent.us-east-1.api.aws",
         certificate_arn: str | None = None,
         use_cloudfront: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Read from SSM (published by ConnectHealthResourcesStack) rather than a
+        # direct CDK cross-stack reference -- see that stack's docstring: this is
+        # what lets it be destroyed/recreated on its own (it holds the costly
+        # HealthLake datastore) without taking this stack down too.
+        domain_id = ssm.StringParameter.value_for_string_parameter(
+            self, f"/connect-health/{environment}/domainId"
+        )
+        subscription_id = ssm.StringParameter.value_for_string_parameter(
+            self, f"/connect-health/{environment}/subscriptionId"
+        )
 
         bucket_name = _bucket_name_from_uri(output_bucket_uri)
 

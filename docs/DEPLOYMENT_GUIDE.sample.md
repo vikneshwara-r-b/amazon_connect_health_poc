@@ -763,7 +763,7 @@ In `frontend/js/config.js`, set the Cognito values:
 
 ```javascript
 window.COGNITO_CONFIG = {
-    userPoolId: '<USER_POOL_ID>',   // e.g., us-east-1_Twy2DNy5x
+    userPoolId: '<USER_POOL_ID>',   // e.g., us-east-1_XXXXXXXXX
     clientId: '<CLIENT_ID>',         // e.g., 5b30r6frkj7f73ea1loonc9nhq
     region: 'us-east-1'
 };

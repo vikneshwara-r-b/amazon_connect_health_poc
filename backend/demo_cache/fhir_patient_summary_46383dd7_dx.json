@@ -1,0 +1,57 @@
+{
+  "success": true,
+  "section": "diagnoses",
+  "patientId": "46383dd73c1d282831d3e7c9101d4901497c32345d4e2fcc657c2eaf9d03830d",
+  "count": 6,
+  "totalAvailable": 6,
+  "results": [
+    {
+      "id": "",
+      "name": "Periapical abscess without sinus (post-extraction)",
+      "code": "58150001",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2023-11-01"
+    },
+    {
+      "id": "",
+      "name": "Dental caries, unspecified (follow-up)",
+      "code": "80967001",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2023-11-01"
+    },
+    {
+      "id": "",
+      "name": "Periapical abscess without sinus",
+      "code": "58150001",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2023-10-27"
+    },
+    {
+      "id": "",
+      "name": "Fracture of tooth, traumatic",
+      "code": "263381003",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2023-10-27"
+    },
+    {
+      "id": "",
+      "name": "Dental caries, unspecified",
+      "code": "80967001",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2023-10-27"
+    },
+    {
+      "id": "",
+      "name": "Exposure to other specified factors",
+      "code": "281666001",
+      "codeSystem": "http://snomed.info/sct",
+      "clinicalStatus": "active",
+      "onsetDate": "2023-10-27"
+    }
+  ]
+}
