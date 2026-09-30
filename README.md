@@ -66,8 +66,8 @@ All deploy-time settings live in `cdk.json`'s `context` block (below the `@aws-c
 | `demoUserEmail` | `connecthealth_demo@example.com` | Cognito demo user's email |
 | `enableCognito` | `true` | Set `false` to skip the Cognito stack entirely (app runs open) |
 | `useCloudFront` | `true` | See the two topologies above |
-| `medicalCodesProvider` | `auto` | Which provider `POST /api/medical-codes` uses: `auto` (try `GenerateMedicalCodes`, fall back to Comprehend Medical + Bedrock on failure), `connect-health` (native API only, no fallback — surfaces its real error), or `comprehend-medical-bedrock` (skip the native call entirely). See `CLAUDE.md` |
-| `showCptCodes` | `true` | Set `false` to hide the "CPT Procedure Codes" section from the UI entirely (both the consultation sidebar and the pre-visit Coding Insights panel) — ICD-10 is unaffected. Templated into `frontend/js/config.js`'s `window.SHOW_CPT_CODES`. Useful while `GenerateMedicalCodes` is gated and CPT only comes from the narrow E&M-classification fallback; flip back to `true` once real access is granted — nothing is deleted, just gated behind this flag |
+| `medicalCodesProvider` | `auto` | Which provider `POST /api/medical-codes` uses: `auto` (try `GenerateMedicalCodes`, fall back to Comprehend Medical ICD-10 only on failure), `connect-health` (native API only, no fallback — surfaces its real error), or `comprehend-medical` (skip the native call entirely). See `CLAUDE.md` |
+| `showCptCodes` | `true` | Set `false` to hide the "CPT Procedure Codes" section from the UI entirely (both the consultation sidebar and the pre-visit Coding Insights panel) — ICD-10 is unaffected. Templated into `frontend/js/config.js`'s `window.SHOW_CPT_CODES`. This app has no CPT/E&M fallback (removed — ICD-10-only fallback, see `CLAUDE.md`), so CPT only ever shows real codes from a working `GenerateMedicalCodes` call; flip back to `true` once real access is granted — nothing is deleted, just gated behind this flag |
 
 **`vpcId`** (optional, pass via `-c vpcId=vpc-...`): by default the app deploys into the account's *default* VPC. Accounts without one (common in shared/training accounts) fail at synth with `Could not find any VPCs matching ... isDefault` — and, if you deploy anyway, bogus `vpc-12345` / `s-12345` CloudFormation validation errors. Pass an existing VPC instead. It needs **at least 2 public subnets in different AZs** with a working internet gateway route: the ALBs are internet-facing and the Fargate tasks get public IPs (they pull images from ECR over the internet).
 
@@ -91,6 +91,34 @@ If the account has no default VPC, add `-c vpcId=<vpc-id>`. Before deploying, ch
 Everything after that — image builds, HealthLake datastore, Connect Health Domain/Subscription, Cognito, ECS services, CloudFront (or S3 website), and templating `config.js` with the real deployed URLs — happens in that one command.
 
 Updating a deployed service (new code) is just `cdk deploy` again — `DockerImageAsset` detects the changed image content and CDK/CloudFormation rolls the ECS service automatically, no manual `--force-new-deployment` needed.
+
+### Or: one-shot deploy script
+
+`scripts/deploy_all.sh` automates the two steps above — `cdk deploy "*"` followed by loading the 3 sample FHIR patients into the newly-deployed HealthLake datastore — into a single command. It doesn't do anything those two steps don't already do individually; it's just a shortcut for a fresh deploy.
+
+```bash
+scripts/deploy_all.sh --profile <your-profile> --password <cognito-demo-password>
+```
+
+Required flags:
+- `--profile PROFILE` — AWS CLI profile to deploy with
+- `--password PASSWORD` — Cognito demo user password (passed as `-c demoUserPassword`; never written to `cdk.json`, same reasoning as the manual deploy above)
+
+Optional flags:
+- `--region REGION` — AWS region (default `us-east-1`)
+- `--vpc-id VPC_ID` — passes `-c vpcId=<vpc-id>`; required for accounts with no default VPC
+- `--environment ENV` — `cdk.json`'s `environment` context value (default `dev`) — also used to look up the deployed HealthLake datastore ID from SSM afterward
+- `--bootstrap` — runs `cdk bootstrap` first (only needed once per account/region)
+- `--yes` — passes `--require-approval never` to `cdk deploy`, skipping the interactive IAM/security-group confirmation prompt; only use this for a run you don't intend to watch
+- `--skip-data-load` — deploy only, don't load sample FHIR data afterward
+- `-h`/`--help` — show usage
+
+Example:
+```bash
+scripts/deploy_all.sh --profile data_sandbox_cdk --password 'Str0ng!Pass' --vpc-id vpc-0faafde279d3be756
+```
+
+Safe to re-run for redeploying code changes — `cdk deploy` only updates what changed. **Not safe to re-run purely to reload sample data**: the loader writes Patients by fixed ID but creates fresh Conditions/Observations/Encounters/MedicationRequests each time, so running this script twice against the same datastore duplicates that clinical history. Use `--skip-data-load` on a second run, or [purge first](#after-deployment-load-sample-fhir-data-into-healthlake).
 
 ## After deployment: load sample FHIR data into HealthLake
 
@@ -172,7 +200,7 @@ Issues hit and fixed while building this CDK port — worth checking first if so
 | `Unknown parameter in encounterContext: "encounterType"` | The real API only accepts `encounterReason` in that structure |
 | `ReservedConcurrentExecutions ... decreases account's UnreservedConcurrentExecution below its minimum` | Low-quota sandbox accounts can't afford per-Lambda concurrency reservations on one-shot custom resources — just remove `reserved_concurrent_executions` |
 | Docker build fails on `eclipse-temurin:*-alpine`, "no match for platform in manifest" | Apple Silicon defaults to `arm64`; pin `platform=ecr_assets.Platform.LINUX_AMD64` on `DockerImageAsset` (matches Fargate's `X86_64` runtime anyway) |
-| Empty ICD-10/CPT codes after a consultation, everything else populated | Medical coding (`GenerateMedicalCodes`) is a gated preview feature — check `aws s3 ls` under the session's `post-stream-action/` prefix for a missing `medicalCodes.json` to confirm. The sidebar's last-resort call falls back to Comprehend Medical + Bedrock automatically in this case (see `CLAUDE.md`) and shows an "AI-Suggested — Needs Clinician Review" badge when it does |
+| Empty ICD-10 codes (and no CPT — expected, see above) after a consultation, everything else populated | Medical coding (`GenerateMedicalCodes`) is a gated preview feature — check `aws s3 ls` under the session's `post-stream-action/` prefix for a missing `medicalCodes.json` to confirm. The sidebar's last-resort call falls back to Comprehend Medical (ICD-10 only) automatically in this case (see `CLAUDE.md`) and shows an "AI-Suggested — Needs Clinician Review" badge when it does |
 | Frontend loads but there are no patients | The datastore is empty — [load the sample data](#after-deployment-load-sample-fhir-data-into-healthlake) |
 | `cdk synth`/`deploy`: `Could not find any VPCs matching ... isDefault`, plus `VpcId: 'vpc-12345' does not match format` / `Subnets.0: 's-12345'` errors | The account has no default VPC — the failed lookup leaves CDK's placeholder IDs everywhere. Deploy with `-c vpcId=<vpc-id>` (a VPC with 2+ public subnets in different AZs) |
 | `AWS::ECS::Service` `CREATE_FAILED`: "ECS Deployment Circuit Breaker was triggered" | Tasks never started. With `assign_public_ip=True`, the usual cause is a VPC with no working internet route — check the subnets' route table for a `0.0.0.0/0` route to a live internet gateway (a deleted IGW leaves the route as `blackhole`), so Fargate can't pull the image from ECR. The rollback deletes the log group, so reproduce with `--no-rollback` to read the task's stopped reason |

@@ -128,16 +128,16 @@
     // MEDICAL CODES DISPLAY
     // ==========================================================================
     // health-agent:GenerateMedicalCodes is a gated preview feature (see CLAUDE.md);
-    // without it, CPT codes only ever come from a narrow Bedrock E&M-classification
-    // fallback (backend/server.py's _EM_CODE_TABLE), not real procedure coding. Set
-    // to false to hide the "CPT Procedure Codes" section entirely until gated
-    // access is granted -- ICD-10 is unaffected either way. Deploy-time only
-    // (redeploy AmazonConnectHealthFrontend to apply); see `-c showCptCodes=` in
-    // README.md.
+    // without it, this app has no CPT/E&M fallback at all (removed -- see
+    // backend/server.py's module comment), so CPT only ever shows real codes from
+    // a working GenerateMedicalCodes call. Set to false to hide the "CPT Procedure
+    // Codes" section entirely until gated access is granted -- ICD-10 is
+    // unaffected either way. Deploy-time only (redeploy AmazonConnectHealthFrontend
+    // to apply); see `-c showCptCodes=` in README.md.
     window.SHOW_CPT_CODES = true;
 
     // Mirrors backend's MEDICAL_CODES_PROVIDER (see cdk.json's `medicalCodesProvider`
-    // / backend/config.py). When it's 'comprehend-medical-bedrock', AWS's native
+    // / backend/config.py). When it's 'comprehend-medical', AWS's native
     // GenerateMedicalCodes is never called server-side, so polling
     // GET /streaming/session/<id>/medical-codes for a medicalCodes.json that will
     // never be written is pure wasted wait -- main.js's pollForMedicalCodes() checks

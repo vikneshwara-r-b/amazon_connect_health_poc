@@ -134,7 +134,7 @@ def handler(event, context):
                 UserAttributes=[
                     {'Name': 'email', 'Value': email},
                     {'Name': 'email_verified', 'Value': 'true'},
-                    {'Name': 'name', 'Value': 'Demo User'}
+                    {'Name': 'name', 'Value': 'John Smith'}
                 ],
                 TemporaryPassword=user_pass,
                 MessageAction='SUPPRESS'

@@ -198,6 +198,7 @@ def handler(event, context):
                     actions=[
                         "health-agent:CreateSubscription",
                         "health-agent:DeleteSubscription",
+                        "health-agent:DeactivateSubscription",
                     ],
                     resources=["*"],
                 )
@@ -238,12 +239,23 @@ def handler(event, context):
 
     if request_type == 'Delete':
         # Best-effort: never block stack deletion on this preview service.
+        #
+        # CONFIRMED (via a real AttributeError, then a live boto3 client
+        # introspection): this API has no delete_subscription operation at
+        # all -- a Subscription can only be deactivated, never deleted. The
+        # bug this comment replaces (calling the nonexistent delete_subscription)
+        # silently no-op'd here every time, which meant Subscriptions were
+        # never actually removed -- and since a Domain can't be deleted while
+        # it still has an active Subscription (DeleteDomain fails with
+        # "Unable to delete Domain as there are resources inside"), every past
+        # destroy left both the Subscription AND the Domain orphaned in AWS
+        # even though this best-effort handler always reported SUCCESS.
         try:
             domain_id = event['ResourceProperties']['DomainId']
             subscription_id = event['PhysicalResourceId']
-            client.delete_subscription(domainId=domain_id, subscriptionId=subscription_id)
+            client.deactivate_subscription(domainId=domain_id, subscriptionId=subscription_id)
         except Exception as e:
-            print(f'Ignoring error deleting subscription (best-effort): {e}')
+            print(f'Ignoring error deactivating subscription (best-effort): {e}')
         cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
         return
 

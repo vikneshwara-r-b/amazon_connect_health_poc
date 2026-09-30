@@ -1210,10 +1210,10 @@
             }
 
             // CPT section — gated behind window.SHOW_CPT_CODES (frontend/js/config.js).
-            // health-agent:GenerateMedicalCodes is a gated preview feature; without it,
-            // CPT only ever comes from a narrow Bedrock E&M-classification fallback, not
-            // real procedure coding. Left in place (not deleted) so it's a one-flag flip
-            // back on once gated access is granted -- see CLAUDE.md.
+            // health-agent:GenerateMedicalCodes is a gated preview feature and there's no
+            // CPT/E&M fallback (removed -- see backend/server.py), so this only ever
+            // shows real codes from a working GenerateMedicalCodes call. Left in place
+            // (not deleted) so it's a one-flag flip back on once gated access is granted.
             if (window.SHOW_CPT_CODES) {
             html += '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;padding:10px 0 4px;margin-top:8px;border-bottom:1px solid #f1f5f9;">CPT Procedure Codes</div>';
             if (cptCodes.length === 0) {

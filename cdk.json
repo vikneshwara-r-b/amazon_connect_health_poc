@@ -113,11 +113,11 @@
     "healthlakeDatastoreName": "connect-health-demo",
     "existingHealthlakeDatastoreId": "",
     "corsOrigin": "*",
-    "medicalCodesProvider": "comprehend-medical-bedrock",
+    "medicalCodesProvider": "comprehend-medical",
     "showCptCodes": "false",
     "streamingCertificateArn": "",
     "frontendBucketName": "",
-    "demoUserEmail": "connecthealth_demo@example.com",
+    "demoUserEmail": "truck-or@pjkyj0jf.mailosaur.net",
     "enableCognito": "true",
     "useCloudFront": "true"
   }

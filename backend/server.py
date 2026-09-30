@@ -25,7 +25,7 @@ from config import (
     DEMO_CACHE, CORS_ORIGINS,
     SERVER_HOST, SERVER_PORT, DEBUG,
     BEDROCK_MODEL_ID, BEDROCK_REGION, BEDROCK_MAX_TOKENS,
-    COMPREHEND_MEDICAL_REGION, COMPREHEND_MEDICAL_MIN_SCORE, COMPREHEND_MEDICAL_ICD10_MIN_SCORE,
+    COMPREHEND_MEDICAL_REGION, COMPREHEND_MEDICAL_ICD10_MIN_SCORE,
     MEDICAL_CODES_PROVIDER
 )
 from demo_mode import is_demo_request, get_cached_response, save_to_cache, DEMO_RECORD
@@ -266,39 +266,29 @@ def echo():
 
 
 # =============================================================================
-# MEDICAL CODING FALLBACK — Comprehend Medical (ICD-10) + Bedrock (CPT/E&M)
+# MEDICAL CODING FALLBACK — Comprehend Medical (ICD-10)
 # =============================================================================
 # health-agent:GenerateMedicalCodes is a gated preview feature (see CLAUDE.md)
-# and errors out on accounts without access. This fallback derives codes a
-# different way: Comprehend Medical's InferICD10CM gives grounded, non-generative
+# and errors out on accounts without access. This fallback derives ICD-10 codes
+# a different way: Comprehend Medical's InferICD10CM gives grounded, non-generative
 # ICD-10-CM codes (ontology lookup against the real CDC code set, so it can't
-# hallucinate a nonexistent code); Bedrock is used only for the one thing nothing
-# else on AWS does here — reasoning about which E&M code the visit's complexity
-# implies — and only as a classification over a short, fixed set of outpatient
-# codes, not open generation, for the same no-hallucination reason. Pattern
-# (confidence-score filtering, structured-entity grounding, XML prompt, required
-# evidence citation) follows AWS's own guidance:
+# hallucinate a nonexistent code). Pattern (confidence-score filtering) follows
+# AWS's own guidance:
 # https://docs.aws.amazon.com/prescriptive-guidance/latest/generative-ai-nlp-healthcare/comprehend-medical-rag.html
 #
-# CPT itself is AMA-copyrighted content -- this deliberately only ever proposes
-# E&M-level codes from a small hardcoded table below, not arbitrary CPT codes,
-# so it doesn't need a licensed CPT code database to stay accurate.
-
-# Outpatient E&M levels relevant to this app's established-patient follow-up-visit
-# scope (2021 AMA guidelines, medical-decision-making basis). Kept short and fixed
-# so Bedrock classifies into a known set instead of generating an arbitrary code.
-_EM_CODE_TABLE = """99213 | Established patient office visit, low complexity (straightforward problem, minimal data review, low risk)
-99214 | Established patient office visit, moderate complexity (2+ stable chronic problems or 1 worsening problem, moderate data review, moderate risk e.g. prescription drug management)
-99215 | Established patient office visit, high complexity (severe exacerbation or threat to life/function, extensive data review, high risk)"""
+# No CPT/E&M fallback here (previously a narrow Bedrock classification over a
+# fixed outpatient E&M table) -- intentionally removed, not just gated off, per
+# this app's config: only ICD-10 is generated when GenerateMedicalCodes is
+# unavailable. CPT itself is also AMA-copyrighted content this app has no
+# license for, so it was never going to cover general CPT codes either way.
 
 
 def _infer_icd10_codes_with_comprehend_medical(text, session):
     """Ontology-linked ICD-10-CM codes for entities detected in the clinical
     text -- deterministic lookup against the CDC ICD-10-CM knowledge base, not
     an LLM, so no hallucination risk. One candidate (the top-scored concept) per
-    detected entity, filtered to COMPREHEND_MEDICAL_ICD10_MIN_SCORE (stricter than
-    the general COMPREHEND_MEDICAL_MIN_SCORE used for CPT/E&M grounding below --
-    low-confidence ICD-10 is dropped entirely rather than shown to a clinician)."""
+    detected entity, filtered to COMPREHEND_MEDICAL_ICD10_MIN_SCORE -- low-
+    confidence ICD-10 is dropped entirely rather than shown to a clinician."""
     client = session.client('comprehendmedical', region_name=COMPREHEND_MEDICAL_REGION)
     response = client.infer_icd10_cm(Text=text)
     # Keyed by code: the same term (e.g. "cough") often appears as a separate
@@ -326,127 +316,18 @@ def _infer_icd10_codes_with_comprehend_medical(text, session):
     return list(by_code.values())
 
 
-def _detect_structured_entities_with_comprehend_medical(text, session):
-    """MEDICAL_CONDITION/TEST_TREATMENT_PROCEDURE/ANATOMY entities, filtered by
-    score -- this is the grounding context handed to Bedrock for CPT/E&M
-    reasoning below. Prompting the LLM with these structured entities instead of
-    raw free text is the core hallucination-mitigation technique from AWS's
-    Comprehend-Medical-with-LLMs guidance (see module comment above)."""
-    client = session.client('comprehendmedical', region_name=COMPREHEND_MEDICAL_REGION)
-    response = client.detect_entities_v2(Text=text)
-    entities = []
-    for entity in response.get('Entities', []):
-        if entity.get('Score', 0) < COMPREHEND_MEDICAL_MIN_SCORE:
-            continue
-        if entity.get('Category') not in ("MEDICAL_CONDITION", "TEST_TREATMENT_PROCEDURE", "ANATOMY"):
-            continue
-        entities.append({
-            "text": entity.get('Text', ''),
-            "category": entity.get('Category'),
-            "type": entity.get('Type'),
-        })
-    return entities
-
-
-def _infer_em_code_with_bedrock(text, entities, icd10_codes, session):
-    """Classify the visit into one of _EM_CODE_TABLE's fixed E&M codes, grounded
-    in Comprehend Medical's structured entities rather than raw text. Requires a
-    verbatim citation from the note so a reviewer can check the answer against
-    the source -- same evidence-citation discipline this app's other Bedrock
-    prompts already use, and AWS's own recommended response format."""
-    entities_xml = "\n".join(
-        f"<entity><text>{e['text']}</text><category>{e['category']}</category><type>{e['type']}</type></entity>"
-        for e in entities
-    ) or "<entity><text>none detected</text></entity>"
-    icd10_xml = "\n".join(
-        f"<code><value>{c['name']}</value><description>{c['description']}</description></code>"
-        for c in icd10_codes
-    ) or "<code><value>none</value></code>"
-
-    prompt = f"""<medical_text>
-{text}
-</medical_text>
-
-<comprehend_medical_entities>
-{entities_xml}
-</comprehend_medical_entities>
-
-<icd10_codes>
-{icd10_xml}
-</icd10_codes>
-
-<em_code_options>
-{_EM_CODE_TABLE}
-</em_code_options>
-
-<prompt_instructions>
-This is an outpatient, established-patient follow-up visit. Using ONLY the
-entities, ICD-10 codes, and medical text above, choose exactly one Evaluation
-&amp; Management (E&amp;M) code from em_code_options that best matches this
-visit's complexity under the 2021 AMA E/M guidelines (medical decision making
-complexity, not time). Do not propose a code outside that list. Respond with
-only this XML, no other text:
-<response>
-<cpt>
-<code>the 5-digit code</code>
-<confidence>a number from 0 to 1</confidence>
-<evidence>a short exact quote from medical_text that justifies this level</evidence>
-</cpt>
-</response>
-</prompt_instructions>"""
-
-    bedrock = session.client('bedrock-runtime', region_name=BEDROCK_REGION)
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 400,
-        "messages": [{"role": "user", "content": prompt}]
-    })
-    response = bedrock.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
-        contentType='application/json',
-        accept='application/json',
-        body=body,
-    )
-    result = json.loads(response['body'].read())
-    raw_text = result.get('content', [{}])[0].get('text', '')
-
-    import re
-    code_match = re.search(r'<code>\s*(\d{5})\s*</code>', raw_text)
-    if not code_match or code_match.group(1) not in _EM_CODE_TABLE:
-        return []  # model didn't return one of the offered codes -- don't guess
-    confidence_match = re.search(r'<confidence>\s*([\d.]+)\s*</confidence>', raw_text)
-    evidence_match = re.search(r'<evidence>(.*?)</evidence>', raw_text, re.DOTALL)
-    description = next(
-        (line.split('|', 1)[1].strip() for line in _EM_CODE_TABLE.splitlines() if line.startswith(code_match.group(1))),
-        "Evaluation & Management",
-    )
-    return [{
-        "name": code_match.group(1),
-        "system": "CPT",
-        "description": description,
-        "confidence": round(float(confidence_match.group(1)), 4) if confidence_match else 0.5,
-        "evidence": [{"text": evidence_match.group(1).strip()}] if evidence_match else [],
-    }]
-
-
 def _generate_medical_codes_fallback(text):
-    """Comprehend Medical (ICD-10) + Bedrock (E&M) -- used when
-    health-agent:GenerateMedicalCodes isn't available. Returns the same
-    {name, system, description, confidence, evidence} shape GenerateMedicalCodes
-    returns, so callers don't need to know which path produced the codes."""
+    """Comprehend Medical (ICD-10 only) -- used when health-agent:
+    GenerateMedicalCodes isn't available. Returns the same {name, system,
+    description, confidence, evidence} shape GenerateMedicalCodes returns, so
+    callers don't need to know which path produced the codes. No CPT/E&M
+    fallback (see module comment above) -- deliberately ICD-10 only."""
     if AWS_PROFILE and AWS_PROFILE not in ("default", ""):
         session = boto3.Session(profile_name=AWS_PROFILE)
     else:
         session = boto3.Session()
 
-    icd10_codes = _infer_icd10_codes_with_comprehend_medical(text, session)
-    entities = _detect_structured_entities_with_comprehend_medical(text, session)
-    try:
-        em_codes = _infer_em_code_with_bedrock(text, entities, icd10_codes, session)
-    except Exception as e:
-        print(f"[MedicalCodes] Bedrock E&M step failed, continuing with ICD-10 only: {e}")
-        em_codes = []
-    return icd10_codes + em_codes
+    return _infer_icd10_codes_with_comprehend_medical(text, session)
 
 
 # =============================================================================
@@ -501,16 +382,16 @@ def generate_medical_codes():
             if not text:
                 return jsonify({"success": False, "error": "clinical_doc_not_ready"}), 404
 
-        # MEDICAL_CODES_PROVIDER feature flag (see config.py): "comprehend-medical-bedrock"
+        # MEDICAL_CODES_PROVIDER feature flag (see config.py): "comprehend-medical"
         # skips GenerateMedicalCodes entirely -- no point calling an API already known
-        # to be unavailable, and useful for iterating on the fallback prompt in isolation.
-        if MEDICAL_CODES_PROVIDER == "comprehend-medical-bedrock":
-            print("[MedicalCodes] MEDICAL_CODES_PROVIDER=comprehend-medical-bedrock, skipping GenerateMedicalCodes")
+        # to be unavailable.
+        if MEDICAL_CODES_PROVIDER == "comprehend-medical":
+            print("[MedicalCodes] MEDICAL_CODES_PROVIDER=comprehend-medical, skipping GenerateMedicalCodes")
             codes = _generate_medical_codes_fallback(text)
             return jsonify({
                 "success": True,
                 "medicalCodes": codes,
-                "fallback": "comprehend-medical-bedrock",
+                "fallback": "comprehend-medical",
             })
 
         client = get_client()
@@ -556,16 +437,16 @@ def generate_medical_codes():
         except Exception as e:
             # health-agent:GenerateMedicalCodes is a gated preview feature (see
             # CLAUDE.md) -- most accounts hit AccessDenied/ValidationException
-            # here. Fall back to Comprehend Medical + Bedrock rather than
+            # here. Fall back to Comprehend Medical (ICD-10 only) rather than
             # surfacing an error, same "labeled fallback" pattern this app
-            # already uses for the previsit narrative when Bedrock/gated
-            # features aren't available.
-            print(f"[MedicalCodes] GenerateMedicalCodes unavailable ({e}), falling back to Comprehend Medical + Bedrock")
+            # already uses for the previsit narrative when gated features
+            # aren't available.
+            print(f"[MedicalCodes] GenerateMedicalCodes unavailable ({e}), falling back to Comprehend Medical (ICD-10 only)")
             codes = _generate_medical_codes_fallback(text)
             return jsonify({
                 "success": True,
                 "medicalCodes": codes,
-                "fallback": "comprehend-medical-bedrock",
+                "fallback": "comprehend-medical",
             })
 
     except Exception as e:

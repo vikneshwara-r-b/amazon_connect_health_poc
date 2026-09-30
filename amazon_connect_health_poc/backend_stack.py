@@ -41,9 +41,9 @@ class BackendStack(Stack):
         service_endpoint: str = "https://health-agent.us-east-1.api.aws",
         cors_origin: str = "*",
         # Feature flag: which provider POST /api/medical-codes uses -- "auto"
-        # (try GenerateMedicalCodes, fall back to Comprehend Medical + Bedrock),
+        # (try GenerateMedicalCodes, fall back to Comprehend Medical ICD-10 only),
         # "connect-health" (GenerateMedicalCodes only, no fallback), or
-        # "comprehend-medical-bedrock" (skip GenerateMedicalCodes entirely). See
+        # "comprehend-medical" (skip GenerateMedicalCodes entirely). See
         # backend/config.py and CLAUDE.md.
         medical_codes_provider: str = "auto",
         user_pool: cognito.IUserPool | None = None,

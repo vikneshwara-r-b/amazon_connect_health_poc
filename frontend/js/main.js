@@ -7280,8 +7280,8 @@ async function pollForMedicalCodes(sessionId, attempt = 0) {
     // medicalCodes.json will never be written to S3. Polling for it here would
     // just be a guaranteed 90s wait before falling through anyway -- go straight
     // to the direct-call fallback instead.
-    if (attempt === 0 && window.MEDICAL_CODES_PROVIDER === 'comprehend-medical-bedrock') {
-        console.log('[PollCodes] Provider is comprehend-medical-bedrock, skipping S3 poll');
+    if (attempt === 0 && window.MEDICAL_CODES_PROVIDER === 'comprehend-medical') {
+        console.log('[PollCodes] Provider is comprehend-medical, skipping S3 poll');
         generateAndDisplayMedicalCodes();
         return;
     }
@@ -9132,10 +9132,10 @@ function renderMedicalCodesSidebar(codes) {
     codeListContainer.innerHTML = '';
 
     // health-agent:GenerateMedicalCodes wasn't available and the backend fell back
-    // to Comprehend Medical + Bedrock (see server.py) -- disclose it, same as the
+    // to Comprehend Medical ICD-10 only (see server.py) -- disclose it, same as the
     // "Rule-Based Summary" badge used elsewhere when a gated/AI feature falls back.
     const fallbackBadgeHtml = (codes && codes.fallback) // nosemgrep: insecure-innerhtml — static literal, no user data
-        ? '<div class="code-fallback-badge" title="health-agent:GenerateMedicalCodes is unavailable on this account (gated preview) — these codes were derived from Amazon Comprehend Medical (ICD-10) and Bedrock (E&amp;M classification) instead, and have not been reviewed by a coder.">AI-Suggested — Needs Clinician Review</div>'
+        ? '<div class="code-fallback-badge" title="health-agent:GenerateMedicalCodes is unavailable on this account (gated preview) — these ICD-10 codes were derived from Amazon Comprehend Medical instead, and have not been reviewed by a coder.">AI-Suggested — Needs Clinician Review</div>'
         : '';
 
     if (!codes || codes.length === 0) {
@@ -9196,10 +9196,10 @@ function renderMedicalCodesSidebar(codes) {
     }
 
     // Render CPT section — gated behind window.SHOW_CPT_CODES (frontend/js/config.js).
-    // health-agent:GenerateMedicalCodes is a gated preview feature; without it, CPT
-    // only ever comes from a narrow Bedrock E&M-classification fallback, not real
-    // procedure coding. Left in place (not deleted) so it's a one-flag flip back on
-    // once gated access is granted -- see CLAUDE.md.
+    // health-agent:GenerateMedicalCodes is a gated preview feature and there's no
+    // CPT/E&M fallback (removed -- see backend/server.py), so this only ever shows
+    // real codes from a working GenerateMedicalCodes call. Left in place (not
+    // deleted) so it's a one-flag flip back on once gated access is granted.
     if (window.SHOW_CPT_CODES) {
     const cptHeader = document.createElement('div');
     cptHeader.className = 'code-section-header';
