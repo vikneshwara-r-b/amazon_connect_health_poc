@@ -2,7 +2,7 @@
 
 A full-stack demo of Amazon Connect Health's point-of-care capabilities — ambient documentation, pre-visit patient insights, and medical coding — deployed entirely via **AWS CDK (Python)**. This is a CDK port of [aws-samples/sample-amazon-connect-health-point-of-care](https://github.com/aws-samples/sample-amazon-connect-health-point-of-care), which originally shipped as 8 raw CloudFormation templates deployed by hand. See the [blog post](https://aws.amazon.com/blogs/industries/how-amazon-connect-health-brings-agentic-ai-to-the-point-of-care/) for the clinical workflow this app implements.
 
-`DEPLOYMENT_GUIDE.sample.md` in this repo is the **original** CloudFormation/CLI-based guide, kept for historical reference only — none of its manual `aws cloudformation create-stack` steps apply anymore. Everything below reflects the current CDK-based workflow.
+[`docs/DEPLOYMENT_GUIDE.sample.md`](docs/DEPLOYMENT_GUIDE.sample.md) in this repo is the **original** CloudFormation/CLI-based guide, kept for historical reference only — none of its manual `aws cloudformation create-stack` steps apply anymore. Everything below reflects the current CDK-based workflow.
 
 ## Architecture
 
@@ -43,7 +43,7 @@ Application source lives alongside the CDK code: `backend/` (Python Flask API), 
 
 ## Prerequisites
 
-- Python 3.9+ and the AWS CDK CLI (`npm install -g aws-cdk`)
+- Python 3.10+ and the AWS CDK CLI (`npm install -g aws-cdk`) — the CDK stack code uses bare `str | None` union-type annotations (PEP 604), which need Python 3.10 to import without a `TypeError`
 - **Docker**, running locally — `DockerImageAsset` builds and pushes the backend/streaming container images as part of `cdk deploy` (not needed for `cdk synth`)
 - AWS CLI configured with a profile that has deploy permissions
 - `cdk bootstrap` run once per AWS account/region
@@ -184,7 +184,7 @@ The purge deletes resources one at a time (HealthLake has no bulk-delete), so it
 | Setting | Default | Purpose |
 |---|---|---|
 | `window.APP_TIMEZONE` | `America/Lima` | IANA timezone the clinic operates in — drives the schedule screen's appointment-slot times, the "today" date header, and the header clock, so they reflect the clinic's local time rather than whatever timezone the viewer's own browser happens to be set to. Change this one line for a different clinic. |
-| `window.CLINIC_PHONE` | `(555) 123-4567` (both) | Scheduling and office phone numbers shown in the UI footer and SMS follow-up template. |
+| `window.CLINIC_PHONE` | `{ schedulingNumber: '(555) 123-4567', officeNumber: '(555) 123-4567' }` | An object, not a single value — `schedulingNumber` appears in the SMS follow-up template, `officeNumber` in the UI footer and SMS message. |
 | `window.COGNITO_CONFIG` | placeholder values | Templated automatically at deploy time (see the `AmazonConnectHealthFrontend` stack above) — don't hand-edit the deployed copy. |
 
 ## Troubleshooting
