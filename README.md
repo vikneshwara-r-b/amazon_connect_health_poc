@@ -20,7 +20,7 @@ Frontend            Backend               Streaming
    └──────────────► S3 (clinical notes, SOAP notes, medical codes, insights output)
 ```
 
-An editable, color-coded agentic flow diagram is at [`docs/point_of_care_portal_poc.drawio`](docs/point_of_care_portal_poc.drawio) — open it in [draw.io](https://app.diagrams.net), the VS Code Draw.io Integration extension, or import into Lucidchart.
+An editable, color-coded agentic flow diagram is at [`docs/point_of_care_portal_poc.drawio`](docs/point_of_care_portal_poc.drawio) — open it in [draw.io](https://app.diagrams.net), the VS Code Draw.io Integration extension, or import into Lucidchart. That diagram also shows Amazon Comprehend Medical as an "ICD-10 fallback" alongside Medical Coding — this is what the backend falls back to when Connect Health's native `GenerateMedicalCodes` isn't available on the account; see `medicalCodesProvider` below for how it's controlled.
 
 Two topologies, controlled by one `cdk.json` flag (`useCloudFront`):
 - **`useCloudFront: true`** (production-shaped): CloudFront in front of all three components — HTTPS for the frontend, an HTTPS proxy in front of the backend ALB, a WSS proxy in front of the streaming ALB.
